@@ -88,12 +88,59 @@ Meteoric 有自己的模组格式，与 Psych Engine 的 `pack.json` / `modsList
 - `createInstance` 的变量表仍挂在 `PlayState` 上，随对局销毁；Psych 1.0.4 是跨 State 存活。
   「用谱面做菜单」的模组切歌时可能丢对象。
 - Meteoric 的 `FunkinLua.call()` 有重入防护（防 SIGSEGV），脚本里嵌套触发的 Lua 回调会被丢弃。
-- 1.0.4 新增的 5 个回调（`goodNoteHitPre` / `opponentNoteHitPre` / `onKeyPressPre` /
-  `onKeyReleasePre` / `preUpdateScore`）**尚未**接入；Sonic The Funk 未使用。
+- 5 个 Pre 系回调（`goodNoteHitPre` / `opponentNoteHitPre` / `onKeyPressPre` /
+  `onKeyReleasePre` / `preUpdateScore`，0.7.3 起出现、1.0.4 沿用）按下方 0.2 节的
+  `psychV073Compat` 开关接入；仅开 1.0.4 开关、不开 0.7.3 开关时它们不派发。
 - 成就 / 翻译类 1.0.4 新 API（`unlockAchievement` 等）语义与 Meteoric 不同，未接入。
 
 参考实现来源：`FNF-PsychEngine-1.0.4`（pack.json 解析、脚本加载点、`instanceArg`）
 与 `mods/SonicTheFunkChinese`（真实 1.0.4 模组，60 个 `.lua`）。
+
+## 0.2 Psych Engine 0.7.3 脚本系统兼容（`psychV073Compat`，默认关）
+
+设置 → 编程 → **Psych 0.7.3 脚本兼容**。引擎基座是 0.7.1h，原先已散布一批常开的 0.7.3 垫片
+（Lua `version='0.7.3'`、HScript 侧 `getModSetting`、`varsToBring`、手柄函数族、Aseprite 图集、
+mod settings.json 等，**不受本开关控制**）；本开关补齐的是剩余的 0.7.3 脚本面。关闭时新 API
+不注册、新回调不派发，行为与补齐前完全一致（零行为变化）。
+
+| 兼容项 | 开关关闭 | 开关打开 |
+|---|---|---|
+| Lua `getModSetting`（Lua 侧此前未注册） | 不可用 | 可用；`modName` 缺省时按脚本路径 `mods/<mod>/` 解析，解析不到回退 `Mods.currentModDirectory` |
+| Lua `removeHScript` | 不可用 | 可用（与 `removeLuaScript` 同构） |
+| `getSoundPitch` / `setSoundPitch(tag, value, doPause)` | 不可用 | 可用（作用于 `modchartSounds`，上游包在 `FLX_PITCH` 里，Meteoric 自带 flixel 恒可用） |
+| `eraseSaveData` | 不可用 | 可用（抹除 `initSaveData` 初始化的模组存档） |
+| `setTextAutoSize` | 不可用 | 可用；`setTextHeight` 仅保留名字、无效果（Meteoric 的 FlxText 恒自动高度，无 fieldHeight 字段） |
+| `setTextBorder` 第 4 参 `style`（shadow / outline_fast 等） | 忽略，恒 OUTLINE/NONE | 走 `CoolUtil.setTextBorderFromString` |
+| `setHealthBarColors` / `setTimeBarColors` 传 `''`/null | 照旧解析（0.7.1h 语义） | 该侧保留原色（0.7.3 语义） |
+| `LuaUtils.addAnimByIndices` indices 缺省 | `[]`（动画不指向任何帧） | `[0]` |
+| `addHaxeLibrary` 类解析失败 | 直接失败 | 回退枚举解析（`Type.resolveEnum`） |
+| `CustomFlxColor` | 无 `fromInt` / `fromCMYK` | 补齐（纯新增，不受开关控制的静态方法） |
+| `addAnimationByIndices` indices 参数类型 | String | Any（签名放宽，无条件生效） |
+
+**Pre 系回调（0.7.3 新增）**——派发条件：`psychV073Compat` 或 `psychV104Compat` 任一开启：
+
+| 回调 | 触发点 | 取消语义 |
+|---|---|---|
+| `preUpdateScore(miss)` | 记分文本更新前 | 返回 `Function_Stop` 跳过整个记分更新（两版一致） |
+| `onKeyPressPre(key)` / `onKeyReleasePre(key)` | 按键守卫之后、命中计算之前（回放录制之后） | 返回 `Function_Stop` 取消本次按键（两版一致）；回放录制不受取消影响 |
+| `goodNoteHitPre(index, col, type, isSus)` / `opponentNoteHitPre(index, col, type, isSus)` | 命中处理前 | **按版本分流**：0.7.3 仅通知（返回值不取消）；叠开 `psychV104Compat` 时按 1.0.4 语义，Lua/HScript 任一返回 `Function_Stop` 跳过整个命中处理（含场景回调） |
+
+**已知差异（不阻塞运行）**：
+
+- **不移植** `PsychCamera`（引擎自有摄像机体系）与 `MusicBeatState` 集成、转场时长 0.7→0.6；
+  0.7.3 模组 HScript 里引用 `PsychCamera` 类不可用。
+- HScript 的 `game` 仍指 `PlayState.instance`（0.7.3 改绑 `FlxG.state`）——对局内两者恒等，
+  仅非对局场景脚本语义不同；`add/insert/remove` 同理仍绑 `PlayState`。
+- `LuaL.dofile` 不支持字符串脚本（0.7.3 的 dofile→dostring 分支）；Meteoric 脚本一律来自文件。
+- `luaTrace` 保留控制台 `trace` 输出（0.7.3 移除了 console 行）。
+- `getModSetting` 的 modName 缺省解析比 0.7.3 宽容：0.7.3 解析不到 modFolder 直接报错，
+  Meteoric 回退 `Mods.currentModDirectory`（与 HScript 侧既有行为一致）。
+- `setTextHeight` 是保留名字的空实现（引擎自带 flixel 的 FlxText 无 `fieldHeight`，恒自动高度），
+  调用不报错但无任何效果（与 Discord 桩同一先例）。
+- 模组设置只有 `getModSetting` 读取 `data/settings.json`，没有 0.7.3 的模组设置界面。
+
+参考实现来源：`FNF-PsychEngine-0.7.1h` 与 `FNF-PsychEngine-0.7.3` 逐文件 diff
+（`psychlua/` 全部 + `backend/` 脚本可见面）。
 
 ## 1. 开关
 
