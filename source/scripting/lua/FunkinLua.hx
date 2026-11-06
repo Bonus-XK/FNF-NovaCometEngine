@@ -67,6 +67,9 @@ class FunkinLua {
 	#end
 	public var camTarget:FlxCamera;
 	public var scriptName:String = '';
+	// Psych 0.7.3：脚本所属模组目录（构造时从路径解析，getModSetting 不传 modName 时定位用）。
+	// 只读字段，解析不到（内置脚本 / 容器脚本）为 null，消费端自行回退 Mods.currentModDirectory。
+	public var modFolder:String = null;
 	public var closed:Bool = false;
 	// import 导入库系统：记录已导入/正在导入的库路径（防重复执行与循环导入）
 	public var importedScripts:Array<String> = [];
@@ -99,6 +102,7 @@ class FunkinLua {
 		//LuaL.dostring(lua, CLENSE);
 
 		this.scriptName = scriptName;
+		modFolder = resolveModFolder(this.scriptName);
 		var game:PlayState = PlayState.instance;
 		game.luaArray.push(this);
 		game.scriptEpoch++; // 脚本集变化 → 下一帧 setOnScripts 全量重推（新脚本要能读到初值）
@@ -144,6 +148,46 @@ class FunkinLua {
 		CustomSubstate.implement(this);
 		ShaderFunctions.implement(this);
 		DeprecatedFunctions.implement(this);
+
+		// ==== Psych 0.7.3 脚本系统兼容（默认关；开关关闭时不注册，零行为变化）====
+		// 新增 API：getModSetting（Lua 侧，HScript 侧原先已有）/ removeHScript。
+		// 见 ClientPrefs.psychV073Compat 与 PROGRAMMING.md「Psych 0.7.3 脚本系统兼容」。
+		if(Paths.psych073Compat())
+		{
+			addLocalCallback("getModSetting", function(saveTag:String, ?modName:String = null) {
+				if(modName == null)
+				{
+					// 0.7.3 用脚本路径 modFolder；Meteoric 对内置脚本更宽容：
+					// 解析不到时回退 Mods.currentModDirectory（与 HScript 侧既有行为一致）。
+					modName = modFolder != null && modFolder.length > 0 ? modFolder : Mods.currentModDirectory;
+					if(modName == null || modName.length < 1)
+					{
+						luaTrace('getModSetting: Argument #2 is null and script is not inside a Mod folder!', false, false, FlxColor.RED);
+						return null;
+					}
+				}
+				return LuaUtils.getModSetting(saveTag, modName);
+			});
+
+			#if (HSCRIPT_ALLOWED && SScript >= "3.0.0")
+			addLocalCallback("removeHScript", function(luaFile:String, ?ignoreAlreadyRunning:Bool = false) {
+				var foundScript:String = findScript(luaFile, '.hx');
+				if(foundScript != null)
+				{
+					if(!ignoreAlreadyRunning)
+						for (script in game.hscriptArray)
+							if(script != null && script.origin == foundScript)
+							{
+								trace('Closing script ' + (script.origin != null ? script.origin : luaFile));
+								script.destroy();
+								return true;
+							}
+				}
+				luaTrace('removeHScript: Script $luaFile isn\'t running!', false, false, FlxColor.RED);
+				return false;
+			});
+			#end
+		}
 
 		try{
 			var result:Dynamic = LuaL.dofile(lua, scriptName);
@@ -340,6 +384,22 @@ class FunkinLua {
 		{
 			return preloadPath;
 		}
+		return null;
+	}
+
+	/**
+	 * Psych 0.7.3：从脚本路径解析所属模组目录（路径里 mods/ 之后的第一段）。
+	 * 相对/绝对路径都认（按段匹配，不依赖 Paths.mods() 前缀形态）；
+	 * 内置脚本、容器虚拟路径解析不到 → null，消费端回退 Mods.currentModDirectory。
+	 */
+	public static function resolveModFolder(scriptPath:String):String
+	{
+		if(scriptPath == null || scriptPath.length == 0) return null;
+		var parts:Array<String> = scriptPath.split('/');
+		// 定长 for（非 while，必然终止；见 docs/UI-DESIGN.md §6 的循环终止要求）
+		for (i in 0...parts.length - 1)
+			if(parts[i] == 'mods' && i + 1 < parts.length && parts[i + 1].length > 0)
+				return parts[i + 1];
 		return null;
 	}
 

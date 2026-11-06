@@ -47,17 +47,47 @@ class TextFunctions
 			FunkinLua.luaTrace("setTextWidth: Object " + tag + " doesn't exist!", false, false, FlxColor.RED);
 			return false;
 		});
-		Lua_helper.add_callback(lua, "setTextBorder", function(tag:String, size:Int, color:String) {
+
+		// ==== Psych 0.7.3 脚本系统兼容（默认关）====
+		if(Paths.psych073Compat())
+		{
+			// 照 0.7.3 psychlua/TextFunctions.hx 新增。
+			// ⚠ Meteoric 自带 flixel 的 FlxText 没有 fieldHeight（恒 autoSize 派生，见 docs/UI-DESIGN.md），
+			// 上游语义无法映射 —— 按引擎空回调先例（FunkinLua 构造区 Discord 桩）保留名字、不报错、无行为。
+			Lua_helper.add_callback(lua, "setTextHeight", function(tag:String, height:Float) {
+				FunkinLua.luaTrace("setTextHeight: Meteoric 的 FlxText 恒为自动高度（autoSize），该调用无效果", false, false, FlxColor.YELLOW);
+				var obj:FlxText = LuaUtils.getTextObject(tag);
+				return obj != null;
+			});
+			Lua_helper.add_callback(lua, "setTextAutoSize", function(tag:String, value:Bool) {
+				var obj:FlxText = LuaUtils.getTextObject(tag);
+				if(obj != null)
+				{
+					obj.autoSize = value;
+					return true;
+				}
+				FunkinLua.luaTrace("setTextAutoSize: Object " + tag + " doesn't exist!", false, false, FlxColor.RED);
+				return false;
+			});
+		}
+
+		Lua_helper.add_callback(lua, "setTextBorder", function(tag:String, size:Int, color:String, ?style:String = 'outline') {
 			var obj:FlxText = LuaUtils.getTextObject(tag);
 			if(obj != null)
 			{
-				if(size > 0)
-				{
-					obj.borderStyle = OUTLINE;
-					obj.borderSize = size;
-				}
+				// Psych 0.7.3：style 参数走 setTextBorderFromString（shadow/outline_fast 等）。
+				// 开关关闭时保持 0.7.1h 语义（恒 OUTLINE/NONE，style 不生效）；
+				// style 为默认值 'outline' 时两条路径结果一致，无需区分。
+				if(Paths.psych073Compat() && style != null && style != 'outline')
+					CoolUtil.setTextBorderFromString(obj, (size > 0 ? style : 'none'));
 				else
-					obj.borderStyle = NONE;
+				{
+					if(size > 0)
+						obj.borderStyle = OUTLINE;
+					else
+						obj.borderStyle = NONE;
+				}
+				if(size > 0) obj.borderSize = size;
 				obj.borderColor = CoolUtil.colorFromString(color);
 				return true;
 			}

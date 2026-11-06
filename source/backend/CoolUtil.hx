@@ -314,4 +314,23 @@ class CoolUtil
 		catch (e:Dynamic) {}
 		return portableRelativeTo(dir);
 	}
+
+	/**
+	 * Psych 0.7.3 移植：按字符串设置 FlxText 描边样式（shadow / outline / outline_fast，其余=none）。
+	 * 供 Lua setTextBorder 的 style 参数（psychV073Compat）使用；全限定枚举避免依赖全局导入。
+	 */
+	public static function setTextBorderFromString(text:flixel.text.FlxText, border:String)
+	{
+		switch(border.toLowerCase().trim())
+		{
+			case 'shadow':
+				text.borderStyle = flixel.text.FlxText.FlxTextBorderStyle.SHADOW;
+			case 'outline':
+				text.borderStyle = flixel.text.FlxText.FlxTextBorderStyle.OUTLINE;
+			case 'outline_fast', 'outlinefast':
+				text.borderStyle = flixel.text.FlxText.FlxTextBorderStyle.OUTLINE_FAST;
+			default:
+				text.borderStyle = flixel.text.FlxText.FlxTextBorderStyle.NONE;
+		}
+	}
 }

@@ -166,6 +166,19 @@ class ExtraFunctions
 			FunkinLua.luaTrace('setDataFromSave: Save file not initialized: ' + name, false, false, FlxColor.RED);
 		});
 
+		// Psych 0.7.3 脚本系统兼容（默认关）：0.7.3 新增，抹除整个模组存档（initSaveData 初始化的那个）
+		if(Paths.psych073Compat())
+		{
+			Lua_helper.add_callback(lua, "eraseSaveData", function(name:String) {
+				if(PlayState.instance.modchartSaves.exists(name))
+				{
+					PlayState.instance.modchartSaves.get(name).erase();
+					return;
+				}
+				FunkinLua.luaTrace('eraseSaveData: Save file not initialized: ' + name, false, false, FlxColor.RED);
+			});
+		}
+
 		// File management
 		Lua_helper.add_callback(lua, "checkFileExists", function(filename:String, ?absolute:Bool = false) {
 			#if MODS_ALLOWED

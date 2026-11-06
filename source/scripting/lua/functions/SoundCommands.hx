@@ -121,5 +121,29 @@ class SoundCommands
 				}
 			}
 		});
+
+		// ==== Psych 0.7.3 脚本系统兼容（默认关）====
+		if(Paths.psych073Compat())
+		{
+			// 照 0.7.3 psychlua/FunkinLua.hx 同名回调（上游包在 #if FLX_PITCH 里；
+			// Meteoric 自带 flixel 的 FlxSound.pitch 恒可用，无需条件编译）。
+			Lua_helper.add_callback(lua, "getSoundPitch", function(tag:String) {
+				if(tag != null && tag.length > 0 && game.modchartSounds.exists(tag)) {
+					return game.modchartSounds.get(tag).pitch;
+				}
+				return 0;
+			});
+			Lua_helper.add_callback(lua, "setSoundPitch", function(tag:String, value:Float, doPause:Bool = false) {
+				if(tag != null && tag.length > 0 && game.modchartSounds.exists(tag)) {
+					var theSound:FlxSound = game.modchartSounds.get(tag);
+					if(theSound != null) {
+						var wasResumed:Bool = theSound.playing;
+						if(doPause) theSound.pause();
+						theSound.pitch = value;
+						if(doPause && wasResumed) theSound.play();
+					}
+				}
+			});
+		}
 	}
 }

@@ -279,7 +279,8 @@ class LuaUtils
 		var obj:Dynamic = LuaUtils.getObjectDirectly(obj, false);
 		if(obj != null && obj.animation != null)
 		{
-			if(indices == null) indices = [];
+			// Psych 0.7.3（开关开）：indices 缺省为 [0]（0.7.1h 语义是 []，动画不指向任何帧）
+			if(indices == null) indices = Paths.psych073Compat() ? [0] : [];
 			if(Std.isOfType(indices, String))
 			{
 				var strIndices:Array<String> = cast (indices, String).trim().split(',');
@@ -545,8 +546,20 @@ class LuaUtils
 		if(FlxG.save.data.modSettings == null) FlxG.save.data.modSettings = new Map<String, Dynamic>();
 
 		var settings:Map<String, Dynamic> = FlxG.save.data.modSettings.get(modName);
-		var path:String = Paths.mods(modName + '/' + Paths.modRelPath('data/settings.json'));
-		if(sys.FileSystem.exists(path))
+		// Psych 0.7.3 模组是旧布局（pack.json + data/settings.json）；Meteoric 新布局映射为
+		// charts/settings.json。modKeysFor 按「兼容开关或该模组本身是旧布局」给出回退序，
+		// 两个候选按序探测 —— 只探映射路径会让 0.7.3 模组的设置永远读不到（冒烟实测）。
+		var path:String = null;
+		for (rel in Paths.modKeysFor(modName, 'data/settings.json'))
+		{
+			var candidate:String = Paths.mods(modName + '/' + rel);
+			if (sys.FileSystem.exists(candidate))
+			{
+				path = candidate;
+				break;
+			}
+		}
+		if(path != null)
 		{
 			if(settings == null || !settings.exists(saveTag))
 			{

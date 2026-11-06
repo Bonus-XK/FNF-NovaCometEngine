@@ -450,7 +450,10 @@ class HScript
 			var str:String = '';
 			if(libPackage.length > 0) str = libPackage + '.';
 			else if(libName == null) libName = '';
-			var c = Type.resolveClass(str + libName);
+			// Dynamic：0.7.3 兼容要在此同时装 Class 与 Enum 解析结果
+			var c:Dynamic = Type.resolveClass(str + libName);
+			// Psych 0.7.3（开关开）：类解析失败时回退枚举解析
+			if(c == null && Paths.psych073Compat()) c = Type.resolveEnum(str + libName);
 			if (funk.hscript != null) {
 				try {
 					if (c != null) funk.hscript.set(libName, c);
@@ -773,11 +776,21 @@ class HScript
 		set('getModSetting', function(saveTag:String, ?modName:String = null) {
 			if(modName == null)
 			{
-				modName = Mods.currentModDirectory;
-				if(modName == null || modName.length < 1)
+				// Psych 0.7.3（开关开）：优先按脚本路径解析所属模组（全局模组脚本可精确定位）；
+				// 解析不到回退 Mods.currentModDirectory（Meteoric/0.7.1h 既有行为，开关关时不变）
+				if(Paths.psych073Compat())
 				{
-					PlayState.instance.addTextToDebug('getModSetting: Argument #2 is null and script is not inside a packed Mod folder!', FlxColor.RED);
-					return null;
+					var resolved:String = FunkinLua.resolveModFolder(origin);
+					if(resolved != null && resolved.length > 0) modName = resolved;
+				}
+				if(modName == null)
+				{
+					modName = Mods.currentModDirectory;
+					if(modName == null || modName.length < 1)
+					{
+						PlayState.instance.addTextToDebug('getModSetting: Argument #2 is null and script is not inside a packed Mod folder!', FlxColor.RED);
+						return null;
+					}
 				}
 			}
 			return LuaUtils.getModSetting(saveTag, modName);
@@ -929,7 +942,10 @@ class HScript
 				var str:String = '';
 				if(libPackage.length > 0) str = libPackage + '.';
 
-				set(libName, Type.resolveClass(str + libName));
+				var c:Dynamic = Type.resolveClass(str + libName);
+				// Psych 0.7.3（开关开）：类解析失败时回退枚举解析
+				if(c == null && Paths.psych073Compat()) c = Type.resolveEnum(str + libName);
+				set(libName, c);
 			}
 			catch (e:Dynamic) {
 				var msg:String = e.message.substr(0, e.message.indexOf('\n'));
@@ -988,13 +1004,22 @@ class CustomFlxColor
 	public static var MAGENTA(default, null):Int = FlxColor.MAGENTA;
 	public static var CYAN(default, null):Int = FlxColor.CYAN;
 
+	// Psych 0.7.3：CustomFlxColor 补充 fromInt / fromCMYK（照 0.7.3 psychlua/HScript.hx）
+	public static function fromInt(Value:Int):Int
+	{
+		return cast FlxColor.fromInt(Value);
+	}
 	public static function fromRGB(Red:Int, Green:Int, Blue:Int, Alpha:Int = 255):Int
 	{
 		return cast FlxColor.fromRGB(Red, Green, Blue, Alpha);
 	}
 	public static function fromRGBFloat(Red:Float, Green:Float, Blue:Float, Alpha:Float = 1):Int
-	{	
+	{
 		return cast FlxColor.fromRGBFloat(Red, Green, Blue, Alpha);
+	}
+	public static inline function fromCMYK(Cyan:Float, Magenta:Float, Yellow:Float, Black:Float, Alpha:Float = 1):Int
+	{
+		return cast FlxColor.fromCMYK(Cyan, Magenta, Yellow, Black, Alpha);
 	}
 	public static function fromHSB(Hue:Float, Sat:Float, Brt:Float, Alpha:Float = 1):Int
 	{	
