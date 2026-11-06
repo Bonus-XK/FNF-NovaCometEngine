@@ -26,6 +26,14 @@ class ScriptGlobals
 		funk.set('Function_StopAll', FunkinLua.Function_StopAll);
 		funk.set('Function_Stop', FunkinLua.Function_Stop);
 		funk.set('Function_Continue', FunkinLua.Function_Continue);
+		// Psych 0.6.3（luaUse063Compat，默认关）：哨兵全局按 0.6.3 数字约定覆盖（0/1/2），
+		// 老模组会拿全局与硬编码数字互比。脚本返回值进引擎时由 FunkinLua.fromLua63Sentinel 归一化。
+		if(ClientPrefs.data.luaUse063Compat)
+		{
+			funk.set('Function_Stop', FunkinLua.LUA63_STOP);
+			funk.set('Function_Continue', FunkinLua.LUA63_CONTINUE);
+			funk.set('Function_StopLua', FunkinLua.LUA63_STOPLUA);
+		}
 		funk.set('luaDebugMode', false);
 		funk.set('luaDeprecatedWarnings', true);
 		funk.set('inChartEditor', false);
@@ -77,7 +85,7 @@ class ScriptGlobals
 		funk.set('rating', 0);
 		funk.set('ratingName', '');
 		funk.set('ratingFC', '');
-		funk.set('version', '0.7.3'); // Psych 0.7 模组兼容：模组用 version:find('7.3') 检测引擎版本来开关 shader 特效
+		funk.set('version', ClientPrefs.data.luaUse063Compat ? '0.6.3' : '0.7.3'); // Psych 模组用 version:find(...) 检测版本来开关特性；0.6.3 兼容时按老约定报告（两代模组不要同时启用，见 PROGRAMMING.md）
 		funk.set('meVersion', Main.meVersion.trim());
 
 		funk.set('inGameOver', false);

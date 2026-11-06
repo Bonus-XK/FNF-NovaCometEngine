@@ -62,6 +62,30 @@ class FunkinLua {
 	public static var Function_StopHScript:Dynamic = "##PSYCHLUA_FUNCTIONSTOPHSCRIPT";
 	public static var Function_StopAll:Dynamic = "##PSYCHLUA_FUNCTIONSTOPALL";
 
+	// Psych 0.6.3 数字哨兵（luaUse063Compat，默认关）：0.6.3 的 Function_*=0/1/2 是数字，
+	// 老模组会硬编码 return 0/1/2 或拿回调结果与数字比较。开启后：
+	// ① Lua 全局改设数字（ScriptGlobals，0.6.3 原值）② 脚本返回值进引擎前在此归一化为字符串哨兵，
+	//    引擎侧全部字符串判定零改动。仅映射 0.6.3 真实存在的 0/1/2，其余数字原样透传
+	//    （防止普通数值返回被误当哨兵）。方向是 Lua→引擎单向；引擎回传给 Lua 的结果走不到哨兵
+	//    （callOn* 系列回调恒返回 true，不回传脚本结果值）。
+	public static inline var LUA63_CONTINUE:Int = 0;
+	public static inline var LUA63_STOP:Int = 1;
+	public static inline var LUA63_STOPLUA:Int = 2;
+
+	/** Lua 返回值 → 引擎哨兵归一化。非数字（bool/string/table 等）与 0/1/2 之外的数字一律原样返回。 */
+	public static function fromLua63Sentinel(v:Dynamic):Dynamic
+	{
+		if (!ClientPrefs.data.luaUse063Compat) return v;
+		// hxcpp：LuaJIT 数字经 Convert.fromLua 进来是 Float/Int，先排除非数值类型再比较
+		if (!Std.isOfType(v, Float) && !Std.isOfType(v, Int)) return v;
+		var f:Float = cast v;
+		if (f == LUA63_CONTINUE) return Function_Continue;
+		if (f == LUA63_STOP) return Function_Stop;
+		if (f == LUA63_STOPLUA) return Function_StopLua;
+		return v;
+	}
+
+
 	#if LUA_ALLOWED
 	public var lua:State = null;
 	#end
@@ -189,6 +213,17 @@ class FunkinLua {
 			#end
 		}
 
+		// ==== Psych 0.6.3 脚本兼容（luaUse063Compat，默认关）====
+		// changePresence 是 0.6.3 唯一被移除的注册函数（0.6.3 FunkinLua:2324，走 DiscordClient；
+		// 本引擎无 Discord 集成）→ 按引擎「保留名空实现」先例注册，防老模组调用报 undefined。
+		// 哨兵数字归一化在 call() 出口与 ScriptGlobals 全局设置处，不在此块。
+		if(ClientPrefs.data.luaUse063Compat)
+		{
+			addLocalCallback("changePresence", function(details:String, ?state:String = null, ?smallImageKey:String = null, ?hasStartTimestamp:Bool = false, ?endTimestamp:Float = 0) {
+				return null; // 无 Discord 集成，保留名空实现（对齐 setTextHeight 桩先例）
+			});
+		}
+
 		try{
 			var result:Dynamic = LuaL.dofile(lua, scriptName);
 			var resultStr:String = Lua.tostring(lua, result);
@@ -260,6 +295,7 @@ class FunkinLua {
 						// If successful, pass and then return the result.
 						var result:Dynamic = cast Convert.fromLua(lua, -1);
 						if (result == null) result = Function_Continue;
+						result = fromLua63Sentinel(result); // Psych 0.6.3：数字哨兵归一化（luaUse063Compat，默认恒等）
 						callResult = result;
 
 						Lua.pop(lua, 1);
