@@ -269,6 +269,8 @@
   "optionDesc.noHitFuncs": "Hitting notes no longer fires the Lua/Hscript goodNoteHit/opponentNoteHit callbacks;\nkeep it on for mods that rely on these callbacks (such as scoring or effect scripts).",
   "option.psychV104Compat": "Psych 1.0.4 Mod Compatibility",
   "optionDesc.psychV104Compat": "When on, recognizes Psych Engine 1.0.4 mods: reads the legacy layout (data/ images/ music/ sounds/ custom_notetypes/ scripts/) plus pack.json / modsList.txt,\nand restores Psych-style script loading (global scripts/, per-song data/<song>/, stage / character / note type / custom event scripts).\nNovaComet directories and mod.json still take priority. Off by default.",
+  "option.psychV073Compat": "Psych 0.7.3 Script Compatibility",
+  "optionDesc.psychV073Compat": "When on, completes the Psych Engine 0.7.3 script API and callbacks: Lua-side getModSetting / removeHScript / getSoundPitch / setSoundPitch / eraseSaveData / setTextAutoSize,\nthe setTextBorder style parameter, and the 5 Pre-family callbacks (preUpdateScore / onKeyPressPre / onKeyReleasePre / goodNoteHitPre / opponentNoteHitPre).\nWith \"Psych 1.0.4 Mod Compatibility\" also on, note-hit Pre callbacks become cancellable (1.0.4 semantics). Off by default.",
   "option.psych063Mode": "Psych 0.6.3 Compatibility",
   "optionDesc.psych063Mode": "When on, disables forced note baking to match the arrow texture format of Psych Engine 0.6.3 mods (try this if arrows are invisible).",
   "option.luaUse063Compat": "Lua 0.6.3 Compatibility",

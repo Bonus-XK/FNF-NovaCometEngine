@@ -308,6 +308,14 @@ class SaveVariables {
 	// 脚本加载（全局 scripts/、歌曲 data/<歌>/、舞台 / 角色 / 音符类型 / 自定义事件的命名脚本）。
 	// 关闭时行为与独立化后的 Meteoric 完全一致（零行为变化）。Meteoric 新目录与 mod.json 始终优先。
 	@:keep public var psychV104Compat:Bool = false;
+	// Psych Engine 0.7.3 脚本系统兼容（默认关）：补全 0.7.3 的脚本 API 与回调面 ——
+	// Lua 侧 getModSetting / removeHScript / getSoundPitch / setSoundPitch / eraseSaveData /
+	// setTextHeight / setTextAutoSize、setTextBorder 的 style 参数、以及 0.7.3 新增的 5 个
+	// Pre 系回调（preUpdateScore / onKeyPressPre / onKeyReleasePre / goodNoteHitPre /
+	// opponentNoteHitPre）。关闭时这些 API 不注册、回调不派发，行为与补齐前完全一致（零行为变化）。
+	// 注意：脚本层原先已有一批 0.7.3 垫片是常开的（version='0.7.3'、HScript 侧 getModSetting 等），
+	// 本开关只管「补齐的部分」；模组加载路径（旧目录布局 / pack.json）仍走 psychV104Compat。
+	@:keep public var psychV073Compat:Bool = false;
 	@:keep public var psych063Mode:Bool = false; // Psych Engine 0.6.3 兼容模式：关闭强制烘焙，兼容旧版箭头贴图格式
 	// Lua 0.6.3 兼容：Psych 0.6.3 的脚本停止哨兵是数字（Function_Continue=0 / Function_Stop=1 /
 	// Function_StopLua=2），0.7.x 起改为字符串哨兵。开启后 dispatch 会数字<->字符串双向归一化，
@@ -854,6 +862,8 @@ class ClientPrefs {
 			{
 				var v:Dynamic = Reflect.field(sd, 'psychV104Compat');
 				if (v != null) data.psychV104Compat = (v == true);
+				var v73:Dynamic = Reflect.field(sd, 'psychV073Compat');
+				if (v73 != null) data.psychV073Compat = (v73 == true);
 				var vm:Dynamic = Reflect.field(sd, 'modchartsEnabled');
 				if (vm != null) data.modchartsEnabled = (vm == true);
 			}

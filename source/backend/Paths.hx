@@ -1101,6 +1101,45 @@ class Paths
 		#end
 	}
 
+	/**
+	 * Psych Engine 0.7.3 脚本系统兼容开关（关闭时零行为变化）。
+	 * 结构与 psychCompat() 完全同款：data 优先 + 存档对象直读兜底 + 首次 trace。
+	 * 只管脚本 API/回调面的补齐（见 ClientPrefs.psychV073Compat 注释），
+	 * 模组加载路径仍归 psychCompat() 与 Mods.isLegacyLayout()。
+	 */
+	public static var _psych073CompatTraced:Bool = false;
+
+	public static function psych073Compat():Bool
+	{
+		#if MODS_ALLOWED
+		var fromData:Bool = ClientPrefs.data != null && ClientPrefs.data.psychV073Compat;
+		if(fromData) return true;
+
+		var fromSave:Bool = false;
+		try
+		{
+			var sd:Dynamic = flixel.FlxG.save != null ? flixel.FlxG.save.data : null;
+			if (sd != null)
+			{
+				var raw:Dynamic = sd.psychV073Compat;
+				fromSave = (raw == true) || (Reflect.field(sd, 'psychV073Compat') == true);
+			}
+		}
+		catch(e:Dynamic) {}
+
+		if(!_psych073CompatTraced)
+		{
+			_psych073CompatTraced = true;
+			trace('[psych073Compat] dataNull=' + (ClientPrefs.data == null)
+				+ ' fromData=' + fromData + ' fromSave=' + fromSave
+				+ (ClientPrefs.data == null ? '' : ' fieldCount=' + Reflect.fields(ClientPrefs.data).length));
+		}
+		return fromSave;
+		#else
+		return false;
+		#end
+	}
+
 	#if MODS_ALLOWED
 	/** `mods/...` 路径入口（全引擎唯一入口）。 */
 	static public function mods(key:String = '') {

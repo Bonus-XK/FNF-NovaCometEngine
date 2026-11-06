@@ -35,6 +35,12 @@ class ProgrammingSettingsSubState extends BaseOptionsMenu
 			'bool');
 		addOption(option);
 
+		var option:Option = new Option('Psych 0.7.3 脚本兼容',
+			'开启后，补全 Psych Engine 0.7.3 的脚本 API 与回调：Lua 侧 getModSetting / removeHScript / getSoundPitch / setSoundPitch / eraseSaveData / setTextAutoSize、\nsetTextBorder 的 style 参数，以及 5 个 Pre 系回调（preUpdateScore / onKeyPressPre / onKeyReleasePre / goodNoteHitPre / opponentNoteHitPre）。\n与「Psych 1.0.4 模组兼容」叠加时，命中 Pre 回调可取消（1.0.4 语义）。默认关闭',
+			'psychV073Compat',
+			'bool');
+		addOption(option);
+
 		var option:Option = new Option('Psych 0.6.3 兼容模式',
 			'开启后，关闭强制音符烘焙，兼容 Psych Engine 0.6.3 模组的箭头贴图格式（箭头不显示时试试这个）',
 			'psych063Mode',

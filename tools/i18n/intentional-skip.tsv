@@ -838,6 +838,7 @@ source/options/PerformanceSubState.hx	限制同时存在的音符对象数量（
 source/options/PerformanceSubState.hx	默认关闭以保持与旧版完全一致的绘制顺序	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	Lua 0.6.3 兼容	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	Psych 0.6.3 兼容模式	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/ProgrammingSettingsSubState.hx	Psych 0.7.3 脚本兼容	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	Psych 1.0.4 模组兼容	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	全局常驻脚本	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	全曲 / 单曲脚本	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -849,6 +850,7 @@ source/options/ProgrammingSettingsSubState.hx	开启 Meteoric 脚本系统：允
 source/options/ProgrammingSettingsSubState.hx	开启后允许谱面使用音符模表：谱面目录放 modchart.json，或在 Lua 脚本里调 startMod / setMod / set / ease 等函数，\\n可以让音符位移、旋转、缩放、消失（3D 透视可用）。\\n只有带模表数据的谱面才会生效，没有模表数据的谱面零开销、零变化。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，Lua 脚本的停止哨兵按 Psych Engine 0.6.3 的数字约定处理（Function_Continue=0 / Function_Stop=1 / Function_StopLua=2）。\\n0.6.3 老模组的 return Function_StopLua 无效（脚本停不下来）时试试这个	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，关闭强制音符烘焙，兼容 Psych Engine 0.6.3 模组的箭头贴图格式（箭头不显示时试试这个）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/ProgrammingSettingsSubState.hx	开启后，补全 Psych Engine 0.7.3 的脚本 API 与回调：Lua 侧 getModSetting / removeHScript / getSoundPitch / setSoundPitch / eraseSaveData / setTextAutoSize、\\nsetTextBorder 的 style 参数，以及 5 个 Pre 系回调（preUpdateScore / onKeyPressPre / onKeyReleasePre / goodNoteHitPre / opponentNoteHitPre）。\\n与「Psych 1.0.4 模组兼容」叠加时，命中 Pre 回调可取消（1.0.4 语义）。默认关闭	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，识别 Psych Engine 1.0.4 模组：读取旧目录布局（data/ images/ music/ sounds/ custom_notetypes/ scripts/）与 pack.json / modsList.txt，\\n并恢复 Psych 风格脚本加载（全局 scripts/、歌曲 data/<歌>/、舞台 / 角色 / 音符类型 / 自定义事件的 .lua / .hx）。\\nMeteoric 新目录与 mod.json 仍然优先。默认关闭	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后：F5 = 重建当前界面的状态脚本，Shift+F5 = 重建全局脚本。\\n脚本自己创建的对象要在 destroy() 里清理，否则会残留。\\n需要先打开「脚本系统（总开关）」。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	扫描已启用模组的 source/ 目录，把其中的 class 注册给 HScript：脚本可以 import 后 new，或调用实例 / 静态成员。\\n只支持普通 class；import 必须写在脚本顶部。\\n默认关闭；关闭时脚本行为与旧版完全一致。\\n需要先打开「脚本系统（总开关）」。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -958,6 +960,7 @@ source/scripting/lua/ObjectBridge.hx	[ObjectBridge] 不支持把 Lua 函数传�
 source/scripting/lua/ObjectBridge.hx	[ObjectBridge] 只有类句柄可以调用构造（${objTypeOf(obj)} 不是类），实例化请用 newObj	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/scripting/lua/ObjectBridge.hx	[ObjectBridge] 构造 $clsName 失败: $e	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/scripting/lua/ShaderFunctions.hx	[setSpriteShader] macOS 跳过 sprite shader（渲染层会崩）: 	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/scripting/lua/TextFunctions.hx	setTextHeight: Meteoric 的 FlxText 恒为自动高度（autoSize），该调用无效果	1	Meteoric 脚本层的诊断日志（log()/logError()，终端可见，非界面文案）
 source/shaders/CRTShader.hx	[CRTShader] GL 编译失败，走默认渲染管线: $error	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/shaders/ErrorHandledShader.hx	[ErrorHandledShader] GL 编译失败，改用默认渲染管线: $name\\n$error	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/shaders/GlobalShaderHandler.hx	[GlobalShaderHandler] ClientPrefs 的 shaders 总闸已关闭，拒绝启用	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
