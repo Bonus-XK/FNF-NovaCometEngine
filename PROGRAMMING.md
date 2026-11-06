@@ -175,6 +175,48 @@ mod settings.json 等，**不受本开关控制**）；本开关补齐的是剩�
 - `onEvent`/`onSpawnNote`/`eventEarlyTrigger` 参数尾部比 0.6.3 多（`strumTime` 等）——
   老模组按位置取前几个参数不受影响；`eventEarlyTrigger` 返回数字 0 的「不提前触发」语义已兼容。
 
+## 0.4 模组引擎版本自动识别（`modsAutoVersion`，默认关）
+
+设置 → 编程 → **模组引擎版本自动识别**。开启后引擎探测每个模组的目标 Psych 版本，脚本按
+**所属模组的检测版本**自动匹配兼容行为——**两代模组可以同场混跑**（各拿各的语义），
+0.3 节「两代模组勿混用」的限制只在手动开关模式下成立。
+
+**探测规则**（`Mods.getDetectedEngineVersion`，按优先级；依据四代上游引擎实际读取的字段/文件）：
+
+| 优先级 | 标记 | 推断 |
+|---|---|---|
+| 1 | 模组根有 `mod.json` | `native`（Meteoric 原生，无需兼容） |
+| 2 | 模组内有 `data/*.lang`（或 `charts/*.lang`） | `1.0`（1.0.x 官方语言文件，唯一官方级 1.0 独有标记） |
+| 3 | pack.json 带 `iconFramerate` 字段，或模组内有 `data/settings.json` | `0.7.3`（两者均 0.7.3 首发） |
+| 4 | pack.json 带 `discordRPC` 字段 | `0.7.1`（0.7 系新增读取，0.6.3 引擎不读） |
+| 5 | 其余有 pack.json 的 | `0.6.3`（0.6 模板形态） |
+| 6 | 无任何元数据 | `unknown` |
+
+Psych 1.0.x **没有官方版本声明字段**（1.0.4 的 pack.json 与 0.7.3 逐字节一致），只能靠
+`data/*.lang` 与模板级新目录区分；pack.json 单独无法区分 0.7.3 与 1.0.x。探测结果缓存于
+`Mods.detectedEngineCache`，随模组安装/删除/启停（`clearLegacyLayoutCache`）失效。
+
+**自动匹配的兼容行为（脚本级，按 `FunkinLua.modFolder` → 检测版本判定）**：
+
+| 行为 | 检测 0.6.3 | 检测 0.7.3 / 1.0 | 检测不到（native/unknown/自动识别关） |
+|---|---|---|---|
+| 哨兵语义（数字 0/1/2 + `call()` 归一化） | 生效 | 不生效（字符串哨兵） | 回退手动开关 `luaUse063Compat` |
+| 全局 `version` 报告值 | `'0.6.3'` | `'0.7.3'` / `'1.0'` | 手动开关决定（默认 `'0.7.3'`） |
+| `changePresence` | 注册（空实现） | 不注册 | 回退手动开关 |
+| 0.7.3 补齐 API（getModSetting / pitch 族 / eraseSaveData / 文本族 / 血条颜色语义） | 不注册 | 注册 | 回退手动开关 `psychV073Compat` |
+
+**边界与已知差异**：
+
+- 0.7.3 API 的 per-mod 覆盖只接了 **Lua 侧有 funk 上下文的注册点**（FunkinLua 构造块、
+  TextFunctions、ExtraFunctions、SoundCommands、ScoreCommands）；HScript 侧与无 funk 上下文的
+  `LuaUtils.addAnimByIndices` 缺省值仍走全局 `psychV073Compat`。
+- **Pre 系回调的取消语义仍由全局 `psychV104Compat` 决定**：派发点（命中/按键/记分）一次派发
+  混合所有版本的脚本，无法按脚本分流；需要 1.0.4 式命中取消时仍手动开 1.0.4 兼容。
+- 探测是**启发式**：手写极简 pack.json 的 0.7.x 模组（无 discordRPC）会被推断为 0.6.3；
+  模组管理页会显示检测结果，发现不对时改用手动开关即可（检测版本只影响自动路径）。
+- 模组管理页（主菜单 → 模组）在列表行状态列、选中卡片与右侧信息面板显示检测结果
+  （`· 引擎 0.6.3` 样式）；自动识别关闭时不显示，界面零变化。
+
 ## 1. 开关
 
 全部在 设置 → 编程 里。**总开关默认关**；关闭时引擎行为与本系统落地前完全一致（不加载脚本、
