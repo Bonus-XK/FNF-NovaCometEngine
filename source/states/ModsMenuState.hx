@@ -710,6 +710,7 @@ class ModsMenuState extends MusicBeatState
 			statusTexts[r].visible = true;
 			statusTexts[r].y = top + 2; // 始终与所在行对齐
 			var status:String = isOn ? Lang.tOr('common.enabled', '已启用') : Lang.tOr('common.disabled', '已停用');
+			status += engineBadgeText(mod.folder); // 自动识别开启时在状态列追加检测到的引擎版本
 			if (lastStatus[r] != status)
 			{
 				lastStatus[r] = status;
@@ -794,6 +795,7 @@ class ModsMenuState extends MusicBeatState
 		// CNE 格式 mod：只做识别提示（Meteoric 已移除 CNE 兼容层，识别逻辑见 backend/CneModProbe）
 		if (backend.CneModProbe.isCneMod(mod.folder))
 			cardStatus.text += Lang.tOr('mods.cneBadge', '   ·   CNE 格式（不兼容）');
+		cardStatus.text += engineBadgeText(mod.folder);
 		cardStatus.updateHitbox();
 
 		// 首次出现做一次克制的淡入（skill：低频、150ms quadOut、可被打断）；之后即时重建
@@ -838,6 +840,20 @@ class ModsMenuState extends MusicBeatState
 	}
 
 	/** 逐字截断到指定像素宽（超宽补省略号）。Card 上不用非公开的 TextField.numLines。 */
+	/**
+	 * 模组行/卡片/信息面板的「检测到的引擎版本」徽标文案。
+	 * 自动识别开关关闭、或检测为 native/unknown（无需匹配）时返回空串（零显示变化）。
+	 * 版本读 Mods.getDetectedEngineVersion 的运行期缓存（权威来源），不缓存文案快照。
+	 */
+	static function engineBadgeText(folder:String):String
+	{
+		if (!ClientPrefs.data.modsAutoVersion) return '';
+		var ver:String = backend.Mods.getDetectedEngineVersion(folder);
+		if (ver == 'native' || ver == 'unknown') return '';
+		var shown:String = (ver == '1.0') ? '1.0.x' : ver;
+		return Lang.tOr('mods.engineVerPrefix', '   ·   引擎 ') + shown;
+	}
+
 	static function fitToWidth(s:String, maxPx:Float, size:Int):String
 	{
 		if (s == null || s.length < 1) return '';
@@ -870,6 +886,7 @@ class ModsMenuState extends MusicBeatState
 		var folderLabel:String = Lang.tOr('mods.folder', '文件夹：') + mod.folder;
 		if (backend.CneModProbe.isCneMod(mod.folder))
 			folderLabel += Lang.tOr('mods.cneBadgeHint', '   ·   CNE 格式，Meteoric 不支持加载');
+		folderLabel += engineBadgeText(mod.folder);
 		clipText(folderText, folderLabel, INFO_W - 20);
 
 		var enabledCount:Int = 0;

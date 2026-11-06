@@ -53,6 +53,12 @@ class ProgrammingSettingsSubState extends BaseOptionsMenu
 			'bool');
 		addOption(option);
 
+		var option:Option = new Option('模组引擎版本自动识别',
+			'开启后，按模组的 pack.json 字段与 data/*.lang、data/settings.json 指纹自动探测目标 Psych 版本，\n并按所属模组自动匹配兼容行为（哨兵语义 / version 全局 / 0.7.3 API），模组管理页显示检测结果。\n检测不到的模组回退上面的手动开关。默认关闭',
+			'modsAutoVersion',
+			'bool');
+		addOption(option);
+
 		// ===== 音符模表（Modchart）=====
 		// 总开关默认关：关闭时不创建渲染器、模表函数空转，零行为变化。
 		var option:Option = new Option('音符模表（Modchart）',
