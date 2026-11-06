@@ -100,6 +100,15 @@ class InputDomain
 			// 回放录制：记录按键按下事件（重放时按时间注入，走同样的判定路径）
 			if (ps.recordingReplay && ps.currentReplay != null)
 				ps.currentReplay.recordInput(Conductor.songPosition, key, false);
+
+			// Psych 0.7.3：onKeyPressPre（0.7.3/1.0.4 同语义，返回 Function_Stop 取消本次按键）
+			// 放在回放录制之后：脚本取消只拦「游玩处理」，不影响回放录制完整性。
+			if(Paths.psych073Compat() || Paths.psychCompat())
+			{
+				var preRet:Dynamic = ps.callOnScripts('onKeyPressPre', [key]);
+				if(preRet == scripting.lua.FunkinLua.Function_Stop) return;
+			}
+
 			var mashPenalty:Bool = false;
 
 			if(ps.notes.length > 0 && !ps.boyfriend.stunned && ps.generatedMusic && !ps.endingSong)
@@ -238,6 +247,15 @@ class InputDomain
 			// 回放录制：记录按键抬起事件
 			if (ps.recordingReplay && ps.currentReplay != null)
 				ps.currentReplay.recordInput(Conductor.songPosition, key, true);
+
+			// Psych 0.7.3：onKeyReleasePre（0.7.3/1.0.4 同语义，返回 Function_Stop 取消本次抬起）
+			// 同样放在回放录制之后，取消不影响回放录制。
+			if(Paths.psych073Compat() || Paths.psychCompat())
+			{
+				var preRet:Dynamic = ps.callOnScripts('onKeyReleasePre', [key]);
+				if(preRet == scripting.lua.FunkinLua.Function_Stop) return;
+			}
+
 			var spr:StrumNote = ps.playerStrums.members[key];
 			if(spr != null)
 			{

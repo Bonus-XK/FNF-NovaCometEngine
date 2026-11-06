@@ -258,6 +258,14 @@ class CameraHudDomain
 	/** 原 PlayState.updateScore（作用域分析：零遮蔽，11 处成员引用已限定）。 */
 	public static function updateScore(ps:PlayState, miss:Bool = false)
 	{
+		// Psych 0.7.3：preUpdateScore（0.7.3/1.0.4 同语义，返回 Function_Stop 跳过整个记分更新；
+		// 上游第 3 参 ignoreStops=true，一个脚本返回 Stop 不阻断其他脚本收到回调）
+		if(Paths.psych073Compat() || Paths.psychCompat())
+		{
+			var preRet:Dynamic = ps.callOnScripts('preUpdateScore', [miss], true);
+			if(preRet == FunkinLua.Function_Stop) return;
+		}
+
 		if(ps.totalPlayed != 0)
 		{
 			var percent:Float = CoolUtil.floorDecimal(ps.ratingPercent * 100, 2);

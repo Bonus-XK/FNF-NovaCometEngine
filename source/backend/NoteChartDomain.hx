@@ -1023,6 +1023,26 @@ class NoteChartDomain
 	/** 原 PlayState.goodNoteHit（作用域分析：零遮蔽，74 处成员引用已限定）。 */
 	public static function goodNoteHit(ps:PlayState, note:Note):Void
 	{
+		// Psych 0.7.3/1.0.4：goodNoteHitPre（上游顺序：wasGoodHit / cpu+ignoreNote 守卫之后、
+		// 置位与一切默认处理之前，取消时连场景回调一起跳过）。
+		// 派发条件：任一 Psych 兼容开关开；关闭时不派发，零行为变化。
+		// 取消语义按版本分流：1.0.4（psychV104Compat）Lua/HScript 返回 Function_Stop 跳过整个
+		// 命中处理；0.7.3 仅通知、不取消。noHitFuncs 与既有命中回调同守卫。
+		if (!note.wasGoodHit && !ClientPrefs.data.noHitFuncs && (Paths.psych073Compat() || Paths.psychCompat()))
+		{
+			if(!(ps.cpuControlled && note.ignoreNote))
+			{
+				var preSus:Bool = note.isSustainNote;
+				var preData:Int = Math.round(Math.abs(note.noteData));
+				var preResult:Dynamic = null;
+				if (ps.luaArray.length > 0)
+					preResult = ps.callOnLuas('goodNoteHitPre', [ps.notes.members.indexOf(note), preData, note.noteType, preSus]);
+				if(preResult != FunkinLua.Function_Stop && preResult != FunkinLua.Function_StopHScript && preResult != FunkinLua.Function_StopAll)
+					preResult = ps.callOnHScript('goodNoteHitPre', [note]);
+				if(Paths.psychCompat() && preResult == FunkinLua.Function_Stop) return;
+			}
+		}
+
 		// 【密集谱自动游玩·命中开销收敛】stagesFunc 每命中创建一个闭包并派发（每次命中都分配），
 		// 密集批（≈每帧数百命中）下是 notes 阶段 300us+ 的来源之一；
 		// 密集自动游玩/回放跳过场景命中回调（Weekend 1 等舞台点亮对自动游玩无意义），手动游玩不受影响。
@@ -1175,10 +1195,23 @@ class NoteChartDomain
 	}
 
 	/** 原 PlayState.opponentNoteHit（作用域分析：零遮蔽，31 处成员引用已限定）。 */
-	public static function opponentNoteHit(ps:PlayState, note:Note):Void
-	{
-		ps.stagesFunc(function(stage:BaseStage) stage.opponentNoteHit(note)); //Psych 1.0.4：场景命中回调（Weekend 1）
-		if (Paths.formatToSongPath(PlayState.SONG.song) != 'tutorial')
+		public static function opponentNoteHit(ps:PlayState, note:Note):Void
+		{
+			// Psych 0.7.3/1.0.4：opponentNoteHitPre（上游位置：函数最顶部，先于一切默认处理）。
+			// 派发条件：任一 Psych 兼容开关开；取消语义按版本分流——1.0.4 返回 Function_Stop
+			// 跳过整个对手命中处理（含场景回调）；0.7.3 仅通知、不取消。
+			if (!ClientPrefs.data.noHitFuncs && (Paths.psych073Compat() || Paths.psychCompat()))
+			{
+				var preResult:Dynamic = null;
+				if (ps.luaArray.length > 0)
+					preResult = ps.callOnLuas('opponentNoteHitPre', [ps.notes.members.indexOf(note), Math.abs(note.noteData), note.noteType, note.isSustainNote]);
+				if(preResult != FunkinLua.Function_Stop && preResult != FunkinLua.Function_StopHScript && preResult != FunkinLua.Function_StopAll)
+					preResult = ps.callOnHScript('opponentNoteHitPre', [note]);
+				if(Paths.psychCompat() && preResult == FunkinLua.Function_Stop) return;
+			}
+
+			ps.stagesFunc(function(stage:BaseStage) stage.opponentNoteHit(note)); //Psych 1.0.4：场景命中回调（Weekend 1）
+			if (Paths.formatToSongPath(PlayState.SONG.song) != 'tutorial')
 			ps.camZooming = true;
 
 		if(note.noteType == 'Hey!' && !ClientPrefs.data.hudOnly && ps.dad.animOffsets.exists('hey')) {
