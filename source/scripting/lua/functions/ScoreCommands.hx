@@ -82,7 +82,7 @@ class ScoreCommands
 		Lua_helper.add_callback(lua, "setHealthBarColors", function(left:String, right:String) {
 			// Psych 0.6.3 语义：left 为未填充侧（对手）颜色，right 为填充侧（玩家）颜色
 			// Psych 0.7.3（开关开）：''/null 表示保留该侧原色
-			if(Paths.psych073Compat())
+			if(funk.use073Compat())
 			{
 				// 保留原色侧读公开的 bar 精灵色（HealthBar.leftColor/rightColor 是私有字段）
 				game.healthBar.setColors(
@@ -97,7 +97,7 @@ class ScoreCommands
 
 		Lua_helper.add_callback(lua, "setTimeBarColors", function(left:String, right:String) {
 			// Psych 0.7.3（开关开）：''/null 表示保留该侧原色
-			if(Paths.psych073Compat())
+			if(funk.use073Compat())
 			{
 				game.timeBar.setColors(
 					(left != null && left != '') ? CoolUtil.colorFromString(left) : game.timeBar.leftBar.color,

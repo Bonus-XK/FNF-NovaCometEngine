@@ -321,6 +321,12 @@ class SaveVariables {
 	// Function_StopLua=2），0.7.x 起改为字符串哨兵。开启后 dispatch 会数字<->字符串双向归一化，
 	// 使 0.6.3 老模组里 `return Function_StopLua` 之类的写法重新生效。默认关闭。
 	@:keep public var luaUse063Compat:Bool = false;
+	// 模组引擎版本自动识别（默认关）：探测每个模组的目标 Psych 版本（pack.json 字段指纹 +
+	// data/*.lang / data/settings.json 文件指纹，规则见 Mods.getDetectedEngineVersion），
+	// 脚本按「所属模组的检测版本」自动匹配兼容行为（哨兵语义 / version 全局 / changePresence /
+	// 0.7.3 API 注册），模组管理页显示检测到的版本。检测不到的模组回退上面的手动开关。
+	// 关闭时行为与手动开关模式完全一致（零行为变化）。
+	@:keep public var modsAutoVersion:Bool = false;
 	// 音符模表（Modchart）总开关（默认关）：modcharting 包渲染器 + Lua/HScript 模表函数的的总闸。
 	// 关闭时：不创建渲染器、模表函数全部空转（注册但不生效），行为与功能落地前完全一致（零行为变化）。
 	// 开启后仍按需生效：仅当谱面带 modchart.json 或脚本调用模表函数时才创建渲染器，无数据零开销。
@@ -864,6 +870,8 @@ class ClientPrefs {
 				if (v != null) data.psychV104Compat = (v == true);
 				var v73:Dynamic = Reflect.field(sd, 'psychV073Compat');
 				if (v73 != null) data.psychV073Compat = (v73 == true);
+				var vav:Dynamic = Reflect.field(sd, 'modsAutoVersion');
+				if (vav != null) data.modsAutoVersion = (vav == true);
 				var vm:Dynamic = Reflect.field(sd, 'modchartsEnabled');
 				if (vm != null) data.modchartsEnabled = (vm == true);
 			}

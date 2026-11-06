@@ -123,7 +123,7 @@ class SoundCommands
 		});
 
 		// ==== Psych 0.7.3 脚本系统兼容（默认关）====
-		if(Paths.psych073Compat())
+		if(funk.use073Compat())
 		{
 			// 照 0.7.3 psychlua/FunkinLua.hx 同名回调（上游包在 #if FLX_PITCH 里；
 			// Meteoric 自带 flixel 的 FlxSound.pitch 恒可用，无需条件编译）。

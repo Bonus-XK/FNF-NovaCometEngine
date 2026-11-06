@@ -167,7 +167,7 @@ class ExtraFunctions
 		});
 
 		// Psych 0.7.3 脚本系统兼容（默认关）：0.7.3 新增，抹除整个模组存档（initSaveData 初始化的那个）
-		if(Paths.psych073Compat())
+		if(funk.use073Compat())
 		{
 			Lua_helper.add_callback(lua, "eraseSaveData", function(name:String) {
 				if(PlayState.instance.modchartSaves.exists(name))

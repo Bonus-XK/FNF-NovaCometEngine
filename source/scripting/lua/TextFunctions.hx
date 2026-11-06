@@ -49,7 +49,7 @@ class TextFunctions
 		});
 
 		// ==== Psych 0.7.3 脚本系统兼容（默认关）====
-		if(Paths.psych073Compat())
+		if(funk.use073Compat())
 		{
 			// 照 0.7.3 psychlua/TextFunctions.hx 新增。
 			// ⚠ Meteoric 自带 flixel 的 FlxText 没有 fieldHeight（恒 autoSize 派生，见 docs/UI-DESIGN.md），
@@ -78,7 +78,7 @@ class TextFunctions
 				// Psych 0.7.3：style 参数走 setTextBorderFromString（shadow/outline_fast 等）。
 				// 开关关闭时保持 0.7.1h 语义（恒 OUTLINE/NONE，style 不生效）；
 				// style 为默认值 'outline' 时两条路径结果一致，无需区分。
-				if(Paths.psych073Compat() && style != null && style != 'outline')
+				if(funk.use073Compat() && style != null && style != 'outline')
 					CoolUtil.setTextBorderFromString(obj, (size > 0 ? style : 'none'));
 				else
 				{
