@@ -137,84 +137,92 @@ class Mods
 	{
 		legacyLayoutCache = [];
 		legacyEnabledCache = null;
-		detectedEngineCache = [];
+	}
+
+	/** 模组引擎版本手动选择缓存（folder → '0.6.3'/'0.7.1'/'0.7.3'/'1.0'；未选择的模组不在 Map）。 */
+	static var engineVersionCache:Map<String, String> = null;
+	public static inline var ENGINE_VERSION_FILE:String = 'meteoric-mod-versions.txt';
+
+	/** 引擎版本选择文件路径（与 meteoric-mods.txt 同目录规则）。 */
+	public static inline function engineVersionPath():String
+	{
+		#if android
+		return backend.AndroidStorage.root() + '/' + ENGINE_VERSION_FILE;
+		#else
+		return ENGINE_VERSION_FILE;
+		#end
 	}
 
 	/**
-	 * 模组目标引擎版本的探测结果缓存（folder → 'native'/'1.0'/'0.7.3'/'0.7.1'/'0.6.3'/'unknown'）。
-	 * 随 clearLegacyLayoutCache 一起失效（模组文件在运行期不变，安装/删除/启停时清）。
+	 * 该模组被用户手动指定的目标引擎版本（模组管理页「引擎版本」按钮循环选择）。
+	 * null = 未指定（「跟随」）→ 脚本层回退全局手动开关（luaUse063Compat / psychV073Compat）。
+	 * 选择持久化在 meteoric-mod-versions.txt（folder|version 行），整份读入缓存，写入时全量重写。
 	 */
-	static var detectedEngineCache:Map<String, String> = [];
-
-	/**
-	 * 探测模组的目标 Psych 引擎版本（「模组引擎版本自动识别」的数据源）。
-	 *
-	 * 推断规则（按优先级，依据四代上游引擎实际读取的字段/文件，见 PROGRAMMING.md「自动识别」）：
-	 *  1. 有 mod.json → `native`（Meteoric 原生模组，无需兼容）；
-	 *  2. 模组内 `data/*.lang` → `1.0`（1.0.x 官方语言文件，唯一官方级 1.0 独有标记）；
-	 *  3. pack.json 带 `iconFramerate` 字段或模组内有 `data/settings.json` → `0.7.3`（两者均 0.7.3 首发）；
-	 *  4. pack.json 带 `discordRPC` 字段 → `0.7.1`（0.7 系新增读取，0.6.3 引擎不读）；
-	 *  5. 其余有 pack.json 的 → `0.6.3`（0.6 模板形态）；
-	 *  6. 无任何元数据 → `unknown`（纯文件夹，无法判断）。
-	 *
-	 * 注意：这是**启发式**——手写极简 pack.json 的 0.7.x 模组会被推断为 0.6.3；
-	 * 0.7.3 与 1.0.x 共享 pack.json 字段集（1.0.4 无官方版本声明字段），靠 *.lang 区分。
-	 * 探测只读磁盘事实，不依赖任何兼容开关。
-	 */
-	public static function getDetectedEngineVersion(folder:String):String
+	public static function getModEngineVersion(folder:String):String
 	{
 		#if MODS_ALLOWED
-		if(folder == null || folder.length == 0) return 'unknown';
-		var cached:String = detectedEngineCache.get(folder);
-		if(cached != null) return cached;
-
-		var ver:String = 'unknown';
-		try
-		{
-			var root:String = Paths.mods(folder);
-			if(FileSystem.exists(root + '/' + META_FILE))
-			{
-				ver = 'native';
-			}
-			else
-			{
-				// 1.0.x 官方语言文件（data/*.lang，含新布局 charts/ 兜底）
-				ver = hasLangFile(root + '/data') ? '1.0' : null;
-				if(ver == null && FileSystem.isDirectory(root + '/charts')) ver = hasLangFile(root + '/charts') ? '1.0' : null;
-
-				var packPath:String = root + '/' + PSYCH_META_FILE;
-				var pack:Dynamic = null;
-				if(ver == null && FileSystem.exists(packPath))
-				{
-					try { pack = Json.parse(File.getContent(packPath)); } catch(e:Dynamic) { pack = null; }
-				}
-				if(ver == null)
-				{
-					if(pack != null && Reflect.hasField(pack, 'iconFramerate')) ver = '0.7.3';
-					else if(FileSystem.exists(root + '/data/settings.json') || FileSystem.exists(root + '/charts/settings.json')) ver = '0.7.3';
-					else if(pack != null && Reflect.hasField(pack, 'discordRPC')) ver = '0.7.1';
-					else if(pack != null) ver = '0.6.3';
-				}
-			}
-		}
-		catch(e:Dynamic) { ver = 'unknown'; }
-
-		detectedEngineCache.set(folder, ver);
-		return ver;
+		if(folder == null || folder.length == 0) return null;
+		if(engineVersionCache == null) loadEngineVersions();
+		return engineVersionCache.get(folder);
+		#else
+		return null;
 		#end
-		return 'unknown';
 	}
 
-	static function hasLangFile(dir:String):Bool
+	/** 设置/清除某模组的手动引擎版本（ver = null 即「跟随」），立即写盘。 */
+	public static function setModEngineVersion(folder:String, ver:String):Void
+	{
+		#if MODS_ALLOWED
+		if(folder == null || folder.length == 0) return;
+		if(engineVersionCache == null) loadEngineVersions();
+		if(ver == null) engineVersionCache.remove(folder);
+		else engineVersionCache.set(folder, ver);
+		saveEngineVersions();
+		#end
+	}
+
+	static function loadEngineVersions():Void
+	{
+		engineVersionCache = [];
+		try
+		{
+			for(line in CoolUtil.coolTextFile(engineVersionPath()))
+			{
+				var dat:Array<String> = line.split('|');
+				if(dat.length < 2 || dat[0].trim().length < 1) continue;
+				var v:String = normalizeEngineVersion(dat[1]);
+				if(v != null) engineVersionCache.set(dat[0].trim(), v);
+			}
+		}
+		catch(e:Dynamic) {}
+	}
+
+	static function saveEngineVersions():Void
 	{
 		try
 		{
-			if(!FileSystem.isDirectory(dir)) return false;
-			for(f in FileSystem.readDirectory(dir))
-				if(f.toLowerCase().endsWith('.lang')) return true;
+			var out:String = '';
+			for(folder => v in engineVersionCache)
+			{
+				if(out.length > 0) out += '\n';
+				out += folder + '|' + v;
+			}
+			File.saveContent(engineVersionPath(), out);
 		}
-		catch(e:Dynamic) {}
-		return false;
+		catch(e:Dynamic) { trace('Could not save $ENGINE_VERSION_FILE: $e'); }
+	}
+
+	/** 把用户/模组声明的版本串归一化为内部值；识别不了的返回 null（不猜测）。 */
+	public static function normalizeEngineVersion(s:String):String
+	{
+		if(s == null) return null;
+		var v:String = s.trim().toLowerCase();
+		if(v.length == 0) return null;
+		if(v == '0.6.3' || v == '0.6') return '0.6.3';
+		if(v == '0.7.1' || v == '0.7.1h' || v == '0.7') return '0.7.1';
+		if(v == '0.7.3') return '0.7.3';
+		if(v == '1.0' || v == '1.0.x' || v == '1.0.4') return '1.0';
+		return null;
 	}
 
 

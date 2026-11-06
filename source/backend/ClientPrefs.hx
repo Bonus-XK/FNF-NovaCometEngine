@@ -20,7 +20,8 @@ class SaveVariables {
 	// FPS 显示样式：'方块'（半透明方形徽章，默认）| '经典'（无底色多行文本）
 	// 存档值即中文档位名（与 fpsColor 同规范，显示层翻译走 optionValue.fpsStyle.*）
 	@:keep public var fpsStyle:String = '方块';
-	// FPS 计数器显示项与顺序（CSV）：'Mem'/'Peak'/'CPU'/'Ver'/'Git' 的子集排列；FPS 数字固定主行，不在清单内。
+	// FPS 计数器显示项与顺序（CSV）：'Mem'/'Peak'/'Heap'/'CPU'/'Ver'/'Git' 的子集排列；FPS 数字固定主行，不在清单内。
+	// 'Mem'/'Peak'=进程物理内存（RSS，含显存/系统共享）；'Heap'=脚本堆（Haxe GC 堆，2026-10-21 前 Mem 的旧口径）。
 	// 'Ver' = 引擎版本行（NovaComet Engine vX.X.X）；'Git' = 提交信息行（#N hash 分支*）—— 两个独立开关。
 	// 由 options.FPSStatsEditorState 编辑；方块/经典两种样式共用同一张清单。空串 = 只显示 FPS 本体。
 	@:keep public var fpsStatsList:String = 'Mem,Peak,CPU,Ver,Git';
@@ -185,6 +186,7 @@ class SaveVariables {
 	@:keep public var rewindOnRestart:Bool = true;
 	@:keep public var healthBarAlpha:Float = 1;
 	@:keep public var hitsoundVolume:Float = 0;
+	@:keep public var hitsoundName:String = 'hitsound'; // 打击音效：'hitsound'=引擎内置（模组可覆盖）；其余=key，见 backend.HitsoundDomain
 	@:keep public var pauseMusic:String = 'Tea Time';
 	@:keep public var checkForUpdates:Bool = true;
 	/**
@@ -264,6 +266,10 @@ class SaveVariables {
 	// 默认全部 = 当前行为，纯自愿开启的性能开关
 	@:keep public var hudOnly:Bool = false;             // 只显示 HUD：不渲染角色/舞台（含雨滤镜等全场景特效）；默认关闭=完整画面
 	@:keep public var enableGC:Bool = true;             // 允许 GC（false=关闭 GC 消除尖峰，内存可能上升）
+	// 移动端歌曲音频流式（Inst/Voices 走 VorbisFile 流，不整条解码进内存）：
+	// 一条 3 分钟 ogg 全量解码 ≈32MB PCM，流式 ≈150KB；老手机内存不足闪退的主要削减项。
+	// 失败自动回退全量解码（行为与旧版一致，绝不崩）。桌面不受此开关影响（桌面恒流式）。
+	@:keep public var mobileStreamAudio:Bool = #if mobile true #else false #end;
 	@:keep public var opponentLightStrum:Bool = true;   // 对手命中时 strum 高亮 confirm
 	@:keep public var botLightStrum:Bool = true;        // 自动游玩命中时玩家 strum 高亮 confirm
 	@:keep public var playerLightStrum:Bool = true;     // 手动命中/按下时玩家 strum 高亮
@@ -321,12 +327,6 @@ class SaveVariables {
 	// Function_StopLua=2），0.7.x 起改为字符串哨兵。开启后 dispatch 会数字<->字符串双向归一化，
 	// 使 0.6.3 老模组里 `return Function_StopLua` 之类的写法重新生效。默认关闭。
 	@:keep public var luaUse063Compat:Bool = false;
-	// 模组引擎版本自动识别（默认关）：探测每个模组的目标 Psych 版本（pack.json 字段指纹 +
-	// data/*.lang / data/settings.json 文件指纹，规则见 Mods.getDetectedEngineVersion），
-	// 脚本按「所属模组的检测版本」自动匹配兼容行为（哨兵语义 / version 全局 / changePresence /
-	// 0.7.3 API 注册），模组管理页显示检测到的版本。检测不到的模组回退上面的手动开关。
-	// 关闭时行为与手动开关模式完全一致（零行为变化）。
-	@:keep public var modsAutoVersion:Bool = false;
 	// 音符模表（Modchart）总开关（默认关）：modcharting 包渲染器 + Lua/HScript 模表函数的的总闸。
 	// 关闭时：不创建渲染器、模表函数全部空转（注册但不生效），行为与功能落地前完全一致（零行为变化）。
 	// 开启后仍按需生效：仅当谱面带 modchart.json 或脚本调用模表函数时才创建渲染器，无数据零开销。
@@ -870,10 +870,15 @@ class ClientPrefs {
 				if (v != null) data.psychV104Compat = (v == true);
 				var v73:Dynamic = Reflect.field(sd, 'psychV073Compat');
 				if (v73 != null) data.psychV073Compat = (v73 == true);
-				var vav:Dynamic = Reflect.field(sd, 'modsAutoVersion');
-				if (vav != null) data.modsAutoVersion = (vav == true);
 				var vm:Dynamic = Reflect.field(sd, 'modchartsEnabled');
 				if (vm != null) data.modchartsEnabled = (vm == true);
+				// hitsoundName：后加字段显式回填（同上教训）；非字符串/空串一律保持默认
+				var vhn:Dynamic = Reflect.field(sd, 'hitsoundName');
+				if (vhn != null && Std.isOfType(vhn, String) && (vhn:String).length > 0)
+					data.hitsoundName = (vhn:String);
+				// mobileStreamAudio：后加字段显式回填（Bool，存了才覆盖平台默认）
+				var vmsa:Dynamic = Reflect.field(sd, 'mobileStreamAudio');
+				if (vmsa != null) data.mobileStreamAudio = (vmsa == true);
 			}
 			var __names:Array<String> = sd == null ? [] : Reflect.fields(sd);
 			trace('[ClientPrefs] psychV104Compat loaded = ' + data.psychV104Compat

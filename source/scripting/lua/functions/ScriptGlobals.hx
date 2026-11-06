@@ -28,7 +28,7 @@ class ScriptGlobals
 		funk.set('Function_Continue', FunkinLua.Function_Continue);
 		// Psych 0.6.3（luaUse063Compat，默认关）：哨兵全局按 0.6.3 数字约定覆盖（0/1/2），
 		// 老模组会拿全局与硬编码数字互比。脚本返回值进引擎时由 FunkinLua.fromLua63SentinelValue 归一化。
-		// 「模组引擎版本自动识别」开启时按所属模组的检测版本判定（funk.use063Sentinels 归一判定）。
+		// 所属模组被用户指定为 0.6.3 时同样覆盖（funk.use063Sentinels 归一判定）。
 		if(funk.use063Sentinels())
 		{
 			funk.set('Function_Stop', FunkinLua.LUA63_STOP);
@@ -87,12 +87,11 @@ class ScriptGlobals
 		funk.set('ratingName', '');
 		funk.set('ratingFC', '');
 		// Psych 模组用 version:find(...) 检测版本来开关特性。
-		// 「模组引擎版本自动识别」开启且能确定所属模组版本 → 按检测版本报告（两代模组可同场混跑）；
-		// 否则按手动开关：luaUse063Compat → '0.6.3'，默认 '0.7.3'。
+		// 所属模组被用户指定版本 → 按指定版本报告（两代模组可同场混跑）；
+		// 未指定则按手动开关：luaUse063Compat → '0.6.3'，默认 '0.7.3'。
 		var verStr:String = '0.7.3';
-		if (ClientPrefs.data.modsAutoVersion && funk.modEngineVersion != null
-			&& funk.modEngineVersion != 'native' && funk.modEngineVersion != 'unknown')
-			verStr = funk.modEngineVersion == '1.0' ? '1.0' : funk.modEngineVersion;
+		if (funk.modEngineVersion != null)
+			verStr = funk.modEngineVersion;
 		else if (ClientPrefs.data.luaUse063Compat)
 			verStr = '0.6.3';
 		funk.set('version', verStr);

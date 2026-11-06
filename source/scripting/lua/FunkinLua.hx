@@ -85,22 +85,22 @@ class FunkinLua {
 	}
 
 	/**
-	 * 本脚本是否按 0.6.3 哨兵语义处理：自动识别开启且所属模组检测为 0.6.3 → 是；
-	 * 否则回退手动开关 luaUse063Compat。
+	 * 本脚本是否按 0.6.3 哨兵语义处理：所属模组被用户指定为 0.6.3 → 是；
+	 * 未指定则回退手动开关 luaUse063Compat。
 	 */
 	public function use063Sentinels():Bool
 	{
-		if (ClientPrefs.data.modsAutoVersion && modEngineVersion == '0.6.3') return true;
+		if (modEngineVersion == '0.6.3') return true;
 		return ClientPrefs.data.luaUse063Compat;
 	}
 
 	/**
-	 * 本脚本是否注册 0.7.3 补齐 API：自动识别开启且所属模组检测为 ≥0.7.3（'0.7.3'/'1.0'）→ 是；
-	 * 否则回退手动开关 psychV073Compat。HScript 侧与无 funk 上下文的静态工具不做 per-mod（保持全局）。
+	 * 本脚本是否注册 0.7.3 补齐 API：所属模组被用户指定为 ≥0.7.3（'0.7.3'/'1.0'）→ 是；
+	 * 未指定则回退手动开关 psychV073Compat。HScript 侧与无 funk 上下文的静态工具不做 per-mod（保持全局）。
 	 */
 	public function use073Compat():Bool
 	{
-		if (ClientPrefs.data.modsAutoVersion && (modEngineVersion == '0.7.3' || modEngineVersion == '1.0')) return true;
+		if (modEngineVersion == '0.7.3' || modEngineVersion == '1.0') return true;
 		return Paths.psych073Compat();
 	}
 
@@ -113,9 +113,9 @@ class FunkinLua {
 	// Psych 0.7.3：脚本所属模组目录（构造时从路径解析，getModSetting 不传 modName 时定位用）。
 	// 只读字段，解析不到（内置脚本 / 容器脚本）为 null，消费端自行回退 Mods.currentModDirectory。
 	public var modFolder:String = null;
-	// 「模组引擎版本自动识别」（modsAutoVersion，默认关）：所属模组的检测版本
-	//（'0.6.3'/'0.7.1'/'0.7.3'/'1.0'/'native'/'unknown'）；自动识别关闭或解析不到 mod 时为 null，
-	// 全部兼容行为回退手动开关。见 Mods.getDetectedEngineVersion 与 PROGRAMMING.md。
+	// 所属模组的引擎版本（'0.6.3'/'0.7.1'/'0.7.3'/'1.0'），用户在模组管理页手动指定
+	//（meteoric-mod-versions.txt）；未指定为 null → 兼容行为回退全局手动开关。
+	// 见 Mods.getModEngineVersion 与 PROGRAMMING.md「模组引擎版本手动匹配」。
 	public var modEngineVersion:String = null;
 	public var closed:Bool = false;
 	// import 导入库系统：记录已导入/正在导入的库路径（防重复执行与循环导入）
@@ -150,9 +150,8 @@ class FunkinLua {
 
 		this.scriptName = scriptName;
 		modFolder = resolveModFolder(this.scriptName);
-		// 「模组引擎版本自动识别」：构造时解析一次所属模组的检测版本（缓存于 Mods，无逐帧 IO）。
-		modEngineVersion = (ClientPrefs.data.modsAutoVersion && modFolder != null && modFolder.length > 0)
-			? Mods.getDetectedEngineVersion(modFolder) : null;
+		// 构造时解析一次所属模组的手动引擎版本（用户在模组管理页选择；缓存于 Mods，无逐帧 IO）。
+		modEngineVersion = (modFolder != null && modFolder.length > 0) ? Mods.getModEngineVersion(modFolder) : null;
 		var game:PlayState = PlayState.instance;
 		game.luaArray.push(this);
 		game.scriptEpoch++; // 脚本集变化 → 下一帧 setOnScripts 全量重推（新脚本要能读到初值）
@@ -202,7 +201,7 @@ class FunkinLua {
 		// ==== Psych 0.7.3 脚本系统兼容（默认关；开关关闭时不注册，零行为变化）====
 		// 新增 API：getModSetting（Lua 侧，HScript 侧原先已有）/ removeHScript。
 		// 见 ClientPrefs.psychV073Compat 与 PROGRAMMING.md「Psych 0.7.3 脚本系统兼容」。
-		// 「模组引擎版本自动识别」开启时，所属模组检测为 ≥0.7.3 的脚本也注册（use073Compat 归一判定）。
+		// 所属模组被用户指定为 ≥0.7.3 时也注册（use073Compat 归一判定）。
 		if(use073Compat())
 		{
 			addLocalCallback("getModSetting", function(saveTag:String, ?modName:String = null) {
@@ -244,7 +243,7 @@ class FunkinLua {
 		// changePresence 是 0.6.3 唯一被移除的注册函数（0.6.3 FunkinLua:2324，走 DiscordClient；
 		// 本引擎无 Discord 集成）→ 按引擎「保留名空实现」先例注册，防老模组调用报 undefined。
 		// 哨兵数字归一化在 call() 出口与 ScriptGlobals 全局设置处，不在此块。
-		// 「模组引擎版本自动识别」开启时，所属模组检测为 0.6.3 的脚本也注册（use063Sentinels 归一判定）。
+		// 所属模组被用户指定为 0.6.3 时也注册（use063Sentinels 归一判定）。
 		if(use063Sentinels())
 		{
 			addLocalCallback("changePresence", function(details:String, ?state:String = null, ?smallImageKey:String = null, ?hasStartTimestamp:Bool = false, ?endTimestamp:Float = 0) {
@@ -323,7 +322,7 @@ class FunkinLua {
 						// If successful, pass and then return the result.
 						var result:Dynamic = cast Convert.fromLua(lua, -1);
 						if (result == null) result = Function_Continue;
-						// Psych 0.6.3：数字哨兵归一化——per-mod（自动识别）优先，回退手动开关（默认恒等）
+						// Psych 0.6.3：数字哨兵归一化——per-mod（用户指定）优先，回退手动开关（默认恒等）
 						result = use063Sentinels() ? fromLua63SentinelValue(result) : result;
 						callResult = result;
 

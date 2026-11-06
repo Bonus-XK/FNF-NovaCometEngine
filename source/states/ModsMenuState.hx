@@ -105,6 +105,7 @@ class ModsMenuState extends MusicBeatState
 	var allOnBtn:ModsButton;
 	var allOffBtn:ModsButton;
 	var deleteBtn:ModsButton;
+	var engineVerBtn:ModsButton;
 	var buttons:Array<ModsButton> = [];
 	var hasModsUI:Array<FlxSprite> = []; // 有 Mod 时才显示的元素
 
@@ -285,8 +286,9 @@ class ModsMenuState extends MusicBeatState
 		allOffBtn = new ModsButton(912, 590, 130, 44, Lang.tOr('mods.disableAll', '全部禁用'), function() { setAllMods(false); });
 		deleteBtn = new ModsButton(1052, 590, 130, 44, Lang.tOr('mods.delete', '删除'), function() { deleteSelected(); });
 		deleteBtn.setLabelColor(0xFFFF6B6B); // 危险操作：红色
+		engineVerBtn = new ModsButton(772, 640, 170, 44, engineVerBtnLabel(), function() { cycleEngineVersion(); });
 
-		buttons = [toggleBtn, upBtn, downBtn, allOnBtn, allOffBtn, deleteBtn];
+		buttons = [toggleBtn, upBtn, downBtn, allOnBtn, allOffBtn, deleteBtn, engineVerBtn];
 		for (btn in buttons)
 		{
 			btn.visible = false;
@@ -841,15 +843,49 @@ class ModsMenuState extends MusicBeatState
 
 	/** 逐字截断到指定像素宽（超宽补省略号）。Card 上不用非公开的 TextField.numLines。 */
 	/**
-	 * 模组行/卡片/信息面板的「检测到的引擎版本」徽标文案。
-	 * 自动识别开关关闭、或检测为 native/unknown（无需匹配）时返回空串（零显示变化）。
-	 * 版本读 Mods.getDetectedEngineVersion 的运行期缓存（权威来源），不缓存文案快照。
+	 * 模组行/卡片/信息面板的「引擎版本」徽标文案：显示用户在信息面板手动选择的版本。
+	 * 未选择（跟随全局手动开关）返回空串 —— 不选择就不显示，界面零变化。
 	 */
+	/** 「引擎版本」按钮标签：显示当前生效状态（跟随 = 未指定）。 */
+	function engineVerBtnLabel():String
+	{
+		var label:String = Lang.tOr('mods.engineVerButton', '引擎版本：跟随');
+		var mod:ModMetadata = (mods != null && curSelected >= 0 && curSelected < mods.length) ? mods[curSelected] : null;
+		if (mod != null)
+		{
+			var ver:String = backend.Mods.getModEngineVersion(mod.folder);
+			if (ver != null)
+				label = Lang.tOr('mods.engineVerButtonPrefix', '引擎版本：') + (ver == '1.0' ? '1.0.x' : ver);
+		}
+		return label;
+	}
+
+	/** 循环切换选中模组的手动引擎版本：跟随 → 0.6.3 → 0.7.1 → 0.7.3 → 1.0.x → 跟随，立即写盘并刷新。 */
+	function cycleEngineVersion():Void
+	{
+		if (curSelected < 0 || curSelected >= mods.length) return;
+		var folder:String = mods[curSelected].folder;
+		var order:Array<String> = [null, '0.6.3', '0.7.1', '0.7.3', '1.0'];
+		var cur:String = backend.Mods.getModEngineVersion(folder);
+		var idx:Int = order.indexOf(cur);
+		var next:String = order[(idx + 1) % order.length];
+		backend.Mods.setModEngineVersion(folder, next);
+		FlxG.sound.play(Paths.sound('scrollMenu'), 0.6);
+		refreshEngineVersionUI();
+	}
+
+	/** 版本选择变更后刷新按钮标签、卡片、行与信息面板（徽标随生效版本即时更新）。 */
+	function refreshEngineVersionUI():Void
+	{
+		if (engineVerBtn != null) engineVerBtn.setText(engineVerBtnLabel());
+		updateRows();
+		updateInfo();
+	}
+
 	static function engineBadgeText(folder:String):String
 	{
-		if (!ClientPrefs.data.modsAutoVersion) return '';
-		var ver:String = backend.Mods.getDetectedEngineVersion(folder);
-		if (ver == 'native' || ver == 'unknown') return '';
+		var ver:String = backend.Mods.getModEngineVersion(folder);
+		if (ver == null) return '';
 		var shown:String = (ver == '1.0') ? '1.0.x' : ver;
 		return Lang.tOr('mods.engineVerPrefix', '   ·   引擎 ') + shown;
 	}
