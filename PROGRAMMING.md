@@ -142,6 +142,39 @@ mod settings.json 等，**不受本开关控制**）；本开关补齐的是剩�
 参考实现来源：`FNF-PsychEngine-0.7.1h` 与 `FNF-PsychEngine-0.7.3` 逐文件 diff
 （`psychlua/` 全部 + `backend/` 脚本可见面）。
 
+## 0.3 Psych Engine 0.6.3 模组支持（`luaUse063Compat`，默认关）
+
+0.6.3 模组的**装载路径不新增开关**：开 `psychV104Compat`（见 0.1）即可——0.6.3 模组的目录布局
+（`data/ images/ songs/ ...` + `pack.json` 可选）、`modsList.txt`（CWD 根，`名字|0/1` 行格式）、
+谱面/事件/角色/舞台/周目 JSON 与 0.7.x 完全同构。纯文件夹模组（无任何元数据）也能被
+`Mods.isLegacyLayout()` 磁盘判定识别。箭头烘焙/RGB 关闭走既有 **Psych 0.6.3 兼容模式**
+（`psych063Mode`）；自定义箭头平铺路径 `images/<skin>.png` 已有自动补 `noteSkins/` 前缀的回退。
+
+本节开关 **Lua 0.6.3 兼容**（`luaUse063Compat`）只管脚本层的代际差异。关闭时零行为变化：
+
+| 兼容项 | 开关关闭 | 开关打开 |
+|---|---|---|
+| 哨兵约定 | 字符串哨兵（`##PSYCHLUA_*`），与 0.7.x 一致 | Lua 全局 `Function_Continue/Function_Stop/Function_StopLua` 改为 0.6.3 数字（0/1/2）；脚本返回的数字 0/1/2 在进引擎前归一化为字符串哨兵，引擎判定零改动 |
+| 脚本硬编码 `return 0/1/2` | 不被识别为停止/继续（派发照常） | 正确按 0.6.3 语义终止/继续派发 |
+| 全局 `version` | `'0.7.3'` | `'0.6.3'`（老模组 `version:find('0.6')` 版本门才能通过） |
+| Lua `changePresence(...)` | 未注册（调用报 undefined） | 保留名空实现（本引擎无 Discord 集成，对齐 `setTextHeight` 桩先例） |
+
+**0.6.3 API 面核对结论**：以 0.6.3 `FunkinLua.hx` 实际注册集（剥注释后 201 个）与引擎注册集
+（263 个）做对称差，**唯一缺失就是 `changePresence`**——`getPropertyAdvanced`/`setPropertyAdvanced`/
+`getGlobals` 在 0.6.3 源码里本就是注释掉的死代码，模组实际调不到，无需移植。
+
+**已知差异（不阻塞运行）**：
+
+- **两代模组不要同时启用**：`version` 全局只能报告一个版本；0.6.3 兼容开启时 0.7.x 模组的
+  `version:find('7.3')` 版本门会失败。脚本层哨兵全局同样二选一。
+- 未登记进 `modsList.txt` 的 0.6.3 模组不会自动启用（0.6.3 原版会自动发现并启用；
+  Meteoric 保守不自动启用，与 1.0.4 兼容同一约定），手动在模组列表启用即可。
+- 0.6.3 模组的 `.hx` 文件原生就不会被加载（0.6.3 无脚本文件式 HScript），引擎行为一致。
+- `callOnLuas` 等 Lua 侧派发回调恒返回 `true`，不回传脚本结果值（0.7.x 起即如此，
+  与 0.6.3 回传结果值不同；依赖该返回值的老模组极少，暂不兼容）。
+- `onEvent`/`onSpawnNote`/`eventEarlyTrigger` 参数尾部比 0.6.3 多（`strumTime` 等）——
+  老模组按位置取前几个参数不受影响；`eventEarlyTrigger` 返回数字 0 的「不提前触发」语义已兼容。
+
 ## 1. 开关
 
 全部在 设置 → 编程 里。**总开关默认关**；关闭时引擎行为与本系统落地前完全一致（不加载脚本、

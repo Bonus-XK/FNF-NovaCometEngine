@@ -2,9 +2,9 @@
 # generator: tools/contract/gen_script_surface.py
 # schema: 1
 # columns: kind<TAB>name<TAB>source_location
-# counts: lua_unique=279 hscript_unique=204 lua_ui_unique=76 pairs_unique=559 bare_name_unique=499 registrations=568 dynamic_sites=4
+# counts: lua_unique=279 hscript_unique=204 lua_ui_unique=77 pairs_unique=560 bare_name_unique=500 registrations=569 dynamic_sites=4
 # 口径: pairs_unique = 唯一 (kind,name) 对数（= 契约条目数）；bare_name_unique = 跨命名空间去重后的裸名数（同一裸名可同时属于多个 kind，属独立契约）
-# dynamic_sites: source/scripting/lua/FunkinLua.hx:117, source/scripting/lua/FunkinLua.hx:462, source/scripting/lua/HScript.hx:927, source/scripting/lua/MenuScript.hx:213
+# dynamic_sites: source/scripting/lua/FunkinLua.hx:141, source/scripting/lua/FunkinLua.hx:498, source/scripting/lua/HScript.hx:927, source/scripting/lua/MenuScript.hx:213
 # 动态点口径: 名字非字面量（运行期由脚本经 FunkinLua.customFunctions / MenuScript.addLocalCallback 注册），基线只冻结内建字面量面。
 # multi_site: hscript.FlxG, hscript.game, hscript.scripting, hscript.state, lua.noteTweenAngle
 # kind=lua    : source/** 下 Lua_helper.add_callback 的字符串字面量
@@ -271,8 +271,8 @@ lua	cameraShake	source/scripting/lua/functions/CameraCommands.hx:32
 lua	cancelCameraTween	source/scripting/lua/functions/CameraCommands.hx:76
 lua	cancelTimer	source/scripting/lua/functions/MiscCommands.hx:60
 lua	cancelTween	source/scripting/lua/functions/ScriptTweens.hx:93
-lua	changeDiscordClientID	source/scripting/lua/FunkinLua.hx:124
-lua	changeDiscordPresence	source/scripting/lua/FunkinLua.hx:123
+lua	changeDiscordClientID	source/scripting/lua/FunkinLua.hx:148
+lua	changeDiscordPresence	source/scripting/lua/FunkinLua.hx:147
 lua	characterDance	source/scripting/lua/functions/CharacterCommands.hx:81
 lua	characterPlayAnim	source/scripting/lua/DeprecatedFunctions.hx:42
 lua	checkFileExists	source/scripting/lua/ExtraFunctions.hx:183
@@ -513,10 +513,11 @@ lua-ui	callOnScripts	source/scripting/lua/functions/ScriptCommands.hx:42
 lua-ui	callStateFunction	source/scripting/lua/functions/MenuCommands.hx:359
 lua-ui	cancelTimer	source/scripting/lua/functions/MenuCommands.hx:222
 lua-ui	cancelTween	source/scripting/lua/functions/MenuCommands.hx:206
+lua-ui	changePresence	source/scripting/lua/FunkinLua.hx:222
 lua-ui	close	source/scripting/lua/functions/MiscCommands.hx:84
 lua-ui	getDataFromSave	source/scripting/lua/functions/MenuCommands.hx:271
 lua-ui	getImportedScripts	source/scripting/lua/functions/MenuCommands.hx:369
-lua-ui	getModSetting	source/scripting/lua/FunkinLua.hx:157
+lua-ui	getModSetting	source/scripting/lua/FunkinLua.hx:181
 lua-ui	getObjectAlpha	source/scripting/lua/functions/MenuCommands.hx:97
 lua-ui	getObjectAngle	source/scripting/lua/functions/MenuCommands.hx:143
 lua-ui	getObjectColor	source/scripting/lua/functions/MenuCommands.hx:132
@@ -550,7 +551,7 @@ lua-ui	objectExists	source/scripting/lua/functions/MenuCommands.hx:75
 lua-ui	openURL	source/scripting/lua/functions/MenuCommands.hx:294
 lua-ui	playMusic	source/scripting/lua/functions/MenuCommands.hx:261
 lua-ui	playSound	source/scripting/lua/functions/MenuCommands.hx:241
-lua-ui	removeHScript	source/scripting/lua/FunkinLua.hx:173
+lua-ui	removeHScript	source/scripting/lua/FunkinLua.hx:197
 lua-ui	removeObject	source/scripting/lua/functions/MenuCommands.hx:63
 lua-ui	resetState	source/scripting/lua/functions/MenuCommands.hx:284
 lua-ui	runHaxeCode	source/scripting/lua/HScript.hx:383
