@@ -52,3 +52,39 @@ __pycache__/
 
 # 降采样实验遗留的 ndll 备份（已废弃，不再入库）
 tools/lime.ndll.wallclock.bak-prepngscale
+
+### 私有文件（2026-11-08 起不上传 GitHub）
+# 内部文档与脚本
+AGENTS.md
+CI.md
+CONTAINERS.md
+PROGRAMMING.md
+push-source.sh
+启动Meteoric.command
+# 技能包（本地 agent 用）
+skills/
+# 本地工作区数据
+.workbuddy/
+.zcode/
+# 本地模组（TCM 与测试模组不发布）
+mods/tcm/
+mods/meteoric_crt_smoke/
+mods/psych063_smoke/
+mods/psych063_switch/
+mods/psych073_smoke/
+mods/psych073_switch/
+# tools 内的测试/证据/契约文件与本地构建机器材
+tools/boundary/
+tools/cne_mod_compat_test/
+tools/cne_smoke_evidence/
+tools/cne_test_mod/
+tools/contract/
+tools/evidence/
+tools/scope/
+tools/lime.ndll.stable
+tools/lime.ndll.wallclock
+tools/lime.ndll.wallclock-arm64
+tools/lime.ndll.win64.wallclock
+tools/wallclock-stash/
+tools/load_report.sh
+docs/CNE-GAP-AUDIT-20261005.md
