@@ -999,16 +999,31 @@ class Note extends FlxSprite
 		var loadPath:String = bakedLoadPath != null ? bakedLoadPath : getNoteSkinLoadPathCached(texture, '', pixelStage, isSustainNote);
 		var kind:Int = bakedKind >= 0 ? bakedKind : (isSustainNote ? BAKE_HOLDEND : BAKE_NOTE);
 		var useRGB:Bool = !PlayState.densePerfMode && !(PlayState.SONG != null && PlayState.SONG.disableNoteRGB == true);
-		var key:String = (bakedKey != null && rgbShader.r == bakedR && rgbShader.g == bakedG && rgbShader.b == bakedB)
+		var cr:FlxColor = rgbShader.r;
+		var cg:FlxColor = rgbShader.g;
+		var cb:FlxColor = rgbShader.b;
+		if (!rgbShader.enabled)
+		{
+			// 移动端 / 关着色器 / 063 兼容：rgbShader 仍是池化模板 lane0 的共享调色板
+			// （defaultRGB() 在禁用态早退，不会换成当前轨道色）。若用它算烘焙 key，
+			// 所有轨道都会拿到 lane0 的烘焙贴图 —— 手机端「note 全部变左箭头」根因。
+			// 禁用态本就不参与 RGB 渲染，改用当前 lane 的调色板作为烘焙色来源；
+			// 启用态（桌面默认 + 自定义 noteType 改色）保持原逻辑不变。
+			var arr:Array<FlxColor> = ExtraKeys.laneColors(noteData, pixelStage);
+			cr = arr[0];
+			cg = arr[1];
+			cb = arr[2];
+		}
+		var key:String = (bakedKey != null && cr == bakedR && cg == bakedG && cb == bakedB)
 			? bakedKey
-			: getBakedNoteKey(loadPath, noteData, kind, rgbShader.r, rgbShader.g, rgbShader.b, useRGB);
+			: getBakedNoteKey(loadPath, noteData, kind, cr, cg, cb, useRGB);
 		var baked:FlxGraphic = bakedNoteGraphics.get(key);
 		#if mobile
 		if (baked == null)
 		{
-			bakeNoteAppearance(loadPath, pixelStage, noteData, kind, rgbShader.r, rgbShader.g, rgbShader.b, useRGB);
-			bakeNoteAppearance(loadPath, pixelStage, noteData, kind == BAKE_NOTE ? BAKE_HOLDEND : BAKE_NOTE, rgbShader.r, rgbShader.g, rgbShader.b, useRGB);
-			bakeNoteAppearance(loadPath, pixelStage, noteData, BAKE_HOLD, rgbShader.r, rgbShader.g, rgbShader.b, useRGB);
+			bakeNoteAppearance(loadPath, pixelStage, noteData, kind, cr, cg, cb, useRGB);
+			bakeNoteAppearance(loadPath, pixelStage, noteData, kind == BAKE_NOTE ? BAKE_HOLDEND : BAKE_NOTE, cr, cg, cb, useRGB);
+			bakeNoteAppearance(loadPath, pixelStage, noteData, BAKE_HOLD, cr, cg, cb, useRGB);
 			baked = bakedNoteGraphics.get(key);
 		}
 		#end
@@ -1031,12 +1046,23 @@ class Note extends FlxSprite
 		if (bakedKind != BAKE_HOLDEND || rgbShader == null) return;
 		var loadPath:String = getNoteSkinLoadPath(texture, '', PlayState.isPixelStage, true);
 		var useRGB:Bool = !PlayState.densePerfMode && !(PlayState.SONG != null && PlayState.SONG.disableNoteRGB == true);
-		var key:String = getBakedNoteKey(loadPath, noteData, BAKE_HOLD, rgbShader.r, rgbShader.g, rgbShader.b, useRGB);
+		var cr:FlxColor = rgbShader.r;
+		var cg:FlxColor = rgbShader.g;
+		var cb:FlxColor = rgbShader.b;
+		if (!rgbShader.enabled)
+		{
+			// 同 tryUseBakedGraphic：禁用态下 rgbShader 是模板 lane0 的共享调色板
+			var arr:Array<FlxColor> = ExtraKeys.laneColors(noteData, PlayState.isPixelStage);
+			cr = arr[0];
+			cg = arr[1];
+			cb = arr[2];
+		}
+		var key:String = getBakedNoteKey(loadPath, noteData, BAKE_HOLD, cr, cg, cb, useRGB);
 		var baked:FlxGraphic = bakedNoteGraphics.get(key);
 		#if mobile
 		if (baked == null)
 		{
-			bakeNoteAppearance(loadPath, PlayState.isPixelStage, noteData, BAKE_HOLD, rgbShader.r, rgbShader.g, rgbShader.b, useRGB);
+			bakeNoteAppearance(loadPath, PlayState.isPixelStage, noteData, BAKE_HOLD, cr, cg, cb, useRGB);
 			baked = bakedNoteGraphics.get(key);
 		}
 		#end
@@ -1806,6 +1832,16 @@ class Note extends FlxSprite
 		blockHit = (target.noteData & (1 << 14)) != 0;
 		ignoreNote = (target.noteData & (1 << 15)) != 0;
 		noteData = target.noteData & 255; // Extra Keys：低 8 位 = lane（0..11），旧 `& 3` 会截断 lane≥4
+
+		// 池化模板恒以 lane0（左箭头）构造，reloadNote 缓存的 bakedKey / bakedR,G,B
+		// 都是 lane0 的。复生换轨后必须作废并按新 lane 重置，否则 tryUseBakedGraphic
+		// 的颜色缓存比较在 rgbShader 禁用态（移动端强制烘焙）恒等 → 一直复用 lane0
+		// 烘焙图 = 所有轨道全变左箭头。
+		bakedKey = null;
+		var laneColors:Array<FlxColor> = ExtraKeys.laneColors(noteData, PlayState.isPixelStage);
+		bakedR = laneColors[0];
+		bakedG = laneColors[1];
+		bakedB = laneColors[2];
 
 		hitsoundDisabled = isSustainNote;
 
