@@ -13,6 +13,7 @@ import states.FreeplayState;
 //
 class PlayCommands
 {
+	static var _mousePos:FlxPoint = null; // getMouseX/Y 复用点：只读标量，不外泄给脚本（每次 getScreenPosition 裸调会分配 FlxPoint）
 	public static function implement(funk:FunkinLua)
 	{
 		var lua:State = funk.lua;
@@ -117,12 +118,16 @@ class PlayCommands
 
 		Lua_helper.add_callback(lua, "getMouseX", function(camera:String) {
 			var cam:FlxCamera = LuaUtils.cameraFromString(camera);
-			return FlxG.mouse.getScreenPosition(cam).x;
+			if (_mousePos == null) _mousePos = FlxPoint.get();
+			FlxG.mouse.getScreenPosition(cam, _mousePos);
+			return _mousePos.x;
 		});
 
 		Lua_helper.add_callback(lua, "getMouseY", function(camera:String) {
 			var cam:FlxCamera = LuaUtils.cameraFromString(camera);
-			return FlxG.mouse.getScreenPosition(cam).y;
+			if (_mousePos == null) _mousePos = FlxPoint.get();
+			FlxG.mouse.getScreenPosition(cam, _mousePos);
+			return _mousePos.y;
 		});
 
 		Lua_helper.add_callback(lua, "getPixelColor", function(obj:String, x:Int, y:Int) {
