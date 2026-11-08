@@ -142,20 +142,60 @@ class GlobalShaderHandler
 	// ==================== 内部 ====================
 
 	/**
-	 * 把根对象的 scrollRect 钉成当前逻辑视口（FlxG.width × FlxG.height）。
+	 * 把根对象的 scrollRect 钉成当前「内容真实矩形」（scaleMode.gameSize，窗口点单位）。
 	 * 作用有两个：① 让 filter 离屏纹理的 bounds 恰好等于窗口（见 enable() 里的黑带说明）；
 	 * ② 窗口尺寸变化（缩放模式切换 / 改窗口大小）后自动跟上，不必重建 shader。
+	 *
+	 * ⚠ 必须钉 gameSize 而不是 FlxG.width/height：flixel 6 的 scaleMode.scale 只施加在
+	 * 各相机的 flashSprite 上，FlxG.game 自身不缩放 —— 根级滤镜的离屏纹理 bounds =
+	 * scrollRect × FlxG.game 矩阵（点空间），而实际画面内容占 gameSize 点。两者只在
+	 * scale = 1（窗口恰好 1280×720）时相等；宽屏适配 / 全屏 / 拖拽窗口（scale ≠ 1）时
+	 * 按逻辑分辨率钉矩形会把滤镜纹理钉小 → 画面右侧/底部被裁、shader 的 uv 空间与
+	 * 内容错位（扫描线 / 遮罩 / 椭圆环全部错乱）。
 	 */
 	static function applyClip():Void
 	{
 		if (FlxG.game == null)
 			return;
-		var w:Float = Math.ceil(FlxG.width);
-		var h:Float = Math.ceil(FlxG.height);
+		var gs = FlxG.scaleMode.gameSize;
+		var w:Float = Math.ceil(gs.x);
+		var h:Float = Math.ceil(gs.y);
+		if (w < 1 || h < 1)
+			return; // scaleMode 尚未完成首次测量，保持现状
 		var r:Rectangle = FlxG.game.scrollRect;
 		if (r != null && r.x == 0 && r.y == 0 && r.width == w && r.height == h)
 			return;
 		FlxG.game.scrollRect = new Rectangle(0, 0, w, h);
+		// bounds 变了 → openfl 的滤镜缓存位图尺寸已失真，释放逼下一帧精确重建
+		freeFilterCache();
+	}
+
+	/**
+	 * 释放 openfl 给根对象滤镜分配的离屏缓存位图（shader 实例与 uniform 保留，不重编译）。
+	 *
+	 * openfl 的 DisplayObjectRenderer 对该缓存只在「内容变大」时重分配，且按 1.25× 超额、
+	 * 变小后沿用旧大尺寸：shader 拿到的 openfl_TextureSize / uv 空间就不再是内容矩形
+	 * （内容只占左上一块），CRT 的扫描线密度、遮罩相位、椭圆环全部错位。
+	 */
+	static function freeFilterCache():Void
+	{
+		var game = FlxG.game;
+		if (game == null)
+			return;
+		@:privateAccess
+		{
+			if (game.__cacheBitmapData != null)
+			{
+				game.__cacheBitmapData.dispose();
+				game.__cacheBitmapData = null;
+			}
+			if (game.__cacheBitmapData2 != null)
+			{
+				game.__cacheBitmapData2.dispose();
+				game.__cacheBitmapData2 = null;
+			}
+			game.__cacheBitmap = null;
+		}
 	}
 
 	/** 从 Lua table / HScript 对象里读一个数值参数（照 setShaderFloatArray 的装箱规整经验）。 */
