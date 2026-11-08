@@ -9,6 +9,8 @@ import flixel.system.FlxAssets.FlxSoundAsset;
 import flixel.system.FlxSound;
 import flixel.system.FlxSoundGroup;
 import flixel.system.ui.FlxSoundTray;
+import backend.ClientPrefs;
+import backend.HitsoundDomain;
 import openfl.Assets;
 import openfl.media.Sound;
 #if (openfl >= "8.0.0")
@@ -369,6 +371,38 @@ class SoundFrontEnd
 	}
 
 	/**
+	 * Shift + +/- ：调节打击音音量（仅打击音已开启时激活，见 update 里的分流）。
+	 * 与主音量不同通道：存档走 ClientPrefs（hitsoundVolume），立即 saveSettings；
+	 * 调整时播一声当前打击音试听（autoDestroy 播完即回收，不堆实例）。
+	 */
+	public function changeHitsoundVolume(Amount:Float):Void
+	{
+		// 防御：分流条件 isEnabled() 已保证 data 非空；直接调用也不许解引用 null
+		if (ClientPrefs.data == null)
+		{
+			showSoundTray(Amount > 0, true);
+			return;
+		}
+		var old:Float = ClientPrefs.data.hitsoundVolume;
+		var target:Float = old + Amount;
+		if (target < 0) target = 0;
+		if (target > 1) target = 1;
+		var noChange:Bool = (target == old);
+		if (!noChange)
+		{
+			ClientPrefs.data.hitsoundVolume = target;
+			ClientPrefs.saveSettings();
+			if (target > 0)
+			{
+				var snd = HitsoundDomain.resolveSound(ClientPrefs.data.hitsoundName);
+				if (snd != null)
+					play(snd, target); // 试听（autoDestroy 默认 true）
+			}
+		}
+		showSoundTray(Amount > 0, noChange);
+	}
+
+	/**
 	 * Shows the sound tray if it is enabled.
 	 * @param up Whether or not the volume is increasing.
 	 * @param silentOnly 为 true 时托盘只显示不发声（无效音量变更时的视觉反馈）
@@ -413,12 +447,24 @@ class SoundFrontEnd
 		}
 
 		#if FLX_KEYBOARD
+		// 打击音已开启时：Shift + +/- 调打击音量（未开/未按 Shift 保持原行为 = 零变化）
+		// ⚠ isEnabled() null 安全：ClientPrefs.data 声明即 null，loadPrefs 前不 dereference
 		if (FlxG.keys.anyJustReleased(muteKeys))
 			toggleMuted();
 		else if (FlxG.keys.anyJustReleased(volumeUpKeys))
-			changeVolume(0.1);
+		{
+			if (FlxG.keys.pressed.SHIFT && HitsoundDomain.isEnabled())
+				changeHitsoundVolume(0.1);
+			else
+				changeVolume(0.1);
+		}
 		else if (FlxG.keys.anyJustReleased(volumeDownKeys))
-			changeVolume(-0.1);
+		{
+			if (FlxG.keys.pressed.SHIFT && HitsoundDomain.isEnabled())
+				changeHitsoundVolume(-0.1);
+			else
+				changeVolume(-0.1);
+		}
 		#end
 	}
 

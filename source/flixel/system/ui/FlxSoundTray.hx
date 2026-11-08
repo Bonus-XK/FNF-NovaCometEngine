@@ -3,6 +3,8 @@ package flixel.system.ui;
 #if FLX_SOUND_SYSTEM
 import backend.Paths;
 import backend.DesignTokens;
+import backend.ClientPrefs;
+import backend.HitsoundDomain;
 import flixel.FlxG;
 import flixel.sound.FlxSound;
 import flixel.system.FlxAssets;
@@ -35,6 +37,16 @@ class FlxSoundTray extends Sprite
 	static inline var H_COLL:Float = 64;
 	static inline var W_EXP:Float = 600;
 	static inline var H_EXP:Float = 170;
+
+	// ---- 打击音行（仅 ClientPrefs.data.hitsoundVolume > 0 时存在）----
+	// 两态基准高度随打击音行显隐变化；**每帧现读 ClientPrefs**，
+	// 勿在构造期固化（托盘构造早于 ClientPrefs.loadPrefs，构造期读到的是默认值）。
+	static inline var H_COLL_HITS:Float = 96;   // 折叠态（含打击音行）
+	static inline var H_EXP_HITS:Float = 220;   // 展开态（含打击音行）
+	static inline var VOL_TRACK_Y_COLL_HITS:Float = 17;  // 打击音行存在时折叠态 VOLUME 轨道上移让位
+	static inline var VOL_TRACK_Y_EXP_HITS:Float = 146;  // 打击音行存在时展开态 VOLUME 轨道下移
+	static inline var HITS_TRACK_Y_COLL:Float = 61;      // 折叠态打击音轨道
+	static inline var HITS_TRACK_Y_EXP:Float = 186;      // 展开态打击音轨道
 
 	// 当前动画尺寸（每帧随 morph 更新）
 	var _width:Float = W_COLL;
@@ -90,6 +102,8 @@ class FlxSoundTray extends Sprite
 
 	var labelTxt:TextField;
 	var pctTxt:TextField;
+	var hitsLabelTxt:TextField;
+	var hitsPctTxt:TextField;
 	var titleTxt:TextField;
 	var timeTxt:TextField;
 
@@ -107,10 +121,15 @@ class FlxSoundTray extends Sprite
 
 	var seekDragging:Bool = false;  // 进度条拖动
 	var dragging:Bool = false;      // 音量条拖动
+	var hitsDragging:Bool = false;  // 打击音条拖动
 	var btPlayHover:Bool = false;
 	var btStopHover:Bool = false;
 	var lastDrawVol:Float = -1;
 	var lastDrawMuted:Bool = false;
+	var lastDrawHits:Float = -1;
+	// 高度基准缓存：打击音行显隐翻转时触发形变块重算 _height
+	var _lastHC:Float = -1;
+	var _lastHE:Float = -1;
 
 	@:keep
 	public function new()
@@ -148,6 +167,32 @@ class FlxSoundTray extends Sprite
 		pctTxt.x = W_COLL - 82;
 		pctTxt.y = Math.round((H_COLL - 30) / 2) + 1;
 		addChild(pctTxt);
+
+		// 打击音行标签（HITS）：仅打击音音量 > 0 时可见（每帧 drawTray 现定）
+		hitsLabelTxt = new TextField();
+		hitsLabelTxt.width = 84;
+		hitsLabelTxt.height = 30;
+		hitsLabelTxt.selectable = false;
+		hitsLabelTxt.embedFonts = true;
+		hitsLabelTxt.defaultTextFormat = new TextFormat(Paths.font('future.ttf'), 15, 0xFFEAF0FF, false);
+		hitsLabelTxt.text = "HITS";
+		hitsLabelTxt.x = 20;
+		hitsLabelTxt.y = 52;
+		hitsLabelTxt.visible = false;
+		addChild(hitsLabelTxt);
+
+		// 打击音行百分比（右侧）
+		hitsPctTxt = new TextField();
+		hitsPctTxt.width = 70;
+		hitsPctTxt.height = 30;
+		hitsPctTxt.selectable = false;
+		hitsPctTxt.embedFonts = true;
+		hitsPctTxt.defaultTextFormat = new TextFormat(Paths.font('future.ttf'), 16, 0xFFFFFFFF, false, null, null, null, null, TextFormatAlign.RIGHT);
+		hitsPctTxt.text = "0%";
+		hitsPctTxt.x = W_COLL - 82;
+		hitsPctTxt.y = 51;
+		hitsPctTxt.visible = false;
+		addChild(hitsPctTxt);
 
 		// 播放器：歌名（展开时淡入）
 		titleTxt = new TextField();
@@ -225,7 +270,10 @@ class FlxSoundTray extends Sprite
 		// dt 上限夹取（33ms）：首次停止试听时会同步加载 freakyMenu（未缓存，可能卡顿数百毫秒），
 		// 若不夹取，卡顿帧的 dt*speed 会被 min(1,...) 夹到 1，expandT 一帧跳完 → 收起动画被吞掉。
 		// 夹取后动画永远以约 0.03s/帧 的节奏推进，卡顿只会延缓、不会跳过。
-		if (expandT != expandTarget)
+		// 高度基准随打击音行显隐变化（hC/hE 每帧现算），翻转时同样从形变块平滑过渡。
+		var hC:Float = baseHColl();
+		var hE:Float = baseHExp();
+		if (expandT != expandTarget || hC != _lastHC || hE != _lastHE)
 		{
 			var dt:Float = Math.min(MS / 1000, 0.033);
 			var speed:Float = (expandTarget > expandT) ? 12 : 9;
@@ -234,7 +282,9 @@ class FlxSoundTray extends Sprite
 				expandT = expandTarget;
 			_easeT = smoothstep(expandT);
 			_width = W_COLL + (W_EXP - W_COLL) * _easeT;
-			_height = H_COLL + (H_EXP - H_COLL) * _easeT;
+			_height = hC + (hE - hC) * _easeT;
+			_lastHC = hC;
+			_lastHE = hE;
 			// 弹窗中部随宽度更新（无需等 resize 事件）
 			screenCenter();
 		}
@@ -312,13 +362,30 @@ class FlxSoundTray extends Sprite
 		if (dragging)
 			updateFromMouse();
 
+		// ---- 打击音条：点击轨道 / 按住圆钮拖动（仅打击音开启时存在）----
+		// 独立判定链：先于主音量条的拖动续判（重叠命中时优先按当前按下的那根）
+		if (FlxG.mouse.justPressed && isHovered() && hitsRowVisible() && isOverHitsTrack(mx, my))
+		{
+			hitsDragging = true;
+			updateHitsFromMouse();
+		}
+		if (FlxG.mouse.justReleased && hitsDragging)
+		{
+			hitsDragging = false;
+			ClientPrefs.saveSettings(); // 拖动结束一次性落盘（拖动中不写档）
+		}
+		if (hitsDragging)
+			updateHitsFromMouse();
+
 		// 键盘 +/- 平滑渐变期间，音量每帧变化，同步刷新显示（播放器态每帧都刷新进度）
+		// ⚠ hitsVolumeNow() null 安全：data 未就绪时返回 -1，不触发重绘也不解引用
 		if (lastDrawVol != FlxG.sound.volume || lastDrawMuted != FlxG.sound.muted
+			|| lastDrawHits != hitsVolumeNow()
 			|| playerVisible || expandT != expandTarget)
 			drawTray();
 
 		// 鼠标悬停/拖动/试听中不消失，移开后重新计时收起（试听中永不自动收起）
-		if (isHovered() || dragging || seekDragging || previewActive)
+		if (isHovered() || dragging || hitsDragging || seekDragging || previewActive)
 		{
 			_timer = 1;
 		}
@@ -327,7 +394,7 @@ class FlxSoundTray extends Sprite
 			_timer -= MS / 1000;
 		}
 
-		if (!isHovered() && !dragging && !seekDragging && !previewActive && _timer <= 0 && y > -_height)
+		if (!isHovered() && !dragging && !hitsDragging && !seekDragging && !previewActive && _timer <= 0 && y > -_height)
 		{
 			// 滑出同样夹取 dt：卡顿帧不会把托盘瞬移出屏幕
 			y -= Math.min(MS / 1000, 0.05) * FlxG.height * 2;
@@ -425,6 +492,17 @@ class FlxSoundTray extends Sprite
 			&& my >= ty - 18 && my <= ty + TRACK_H + 18;
 	}
 
+	// 鼠标在打击音条区域。顶部容差 10（比主音量条的 18 小）：
+	// 折叠态两行轨道相距 44px、展开态相距 40px，若两根都用 ±18 会互相重叠 → 点击一次两根同动。
+	function isOverHitsTrack(mx:Float, my:Float):Bool
+	{
+		var tx:Float = volTrackX();
+		var tw:Float = volTrackW();
+		var ty:Float = hitsTrackY();
+		return mx >= tx - 12 && mx <= tx + tw + 12
+			&& my >= ty - 10 && my <= ty + TRACK_H + 18;
+	}
+
 	// 鼠标在进度条区域
 	function isOverSeek(mx:Float, my:Float):Bool
 	{
@@ -437,6 +515,46 @@ class FlxSoundTray extends Sprite
 	{
 		trayMouse(FlxG.game.mouseX, FlxG.game.mouseY);
 		setVolume((_tmX - volTrackX()) / volTrackW(), false);
+	}
+
+	// 按鼠标位置设置打击音量
+	function updateHitsFromMouse():Void
+	{
+		trayMouse(FlxG.game.mouseX, FlxG.game.mouseY);
+		setHitsVolume((_tmX - volTrackX()) / volTrackW());
+	}
+
+	/** 当前打击音量（data 未就绪时返回 -1：与 lastDrawHits 初值相同，天然不触发重绘/不崩） */
+	inline function hitsVolumeNow():Float
+	{
+		return HitsoundDomain.isEnabled() ? ClientPrefs.data.hitsoundVolume : -1;
+	}
+
+	function setHitsVolume(v:Float):Void
+	{
+		// 防御：拖动判定链之外不应到达；data 未就绪时绝不写入
+		if (!hitsRowVisible())
+			return;
+		v = FlxMathBound(v);
+		var cur:Float = ClientPrefs.data.hitsoundVolume;
+		if (v != cur)
+		{
+			ClientPrefs.data.hitsoundVolume = v;
+			// 跨 10% 档位边界才播试听：拖动连续变化时不会连成一串噪音
+			var stepNow:Int = Std.int(v * 10 + 0.001);
+			var stepPrev:Int = Std.int(cur * 10 + 0.001);
+			if (stepNow != stepPrev && v > 0)
+				playHitsPreview();
+			drawTray();
+		}
+	}
+
+	/** 试听当前打击音（拖动/键盘调整时反馈；autoDestroy 播完即回收，不堆积实例） */
+	function playHitsPreview():Void
+	{
+		var snd:openfl.media.Sound = HitsoundDomain.resolveSound(ClientPrefs.data.hitsoundName);
+		if (snd == null) return;
+		FlxG.sound.play(snd, ClientPrefs.data.hitsoundVolume, false, null, true);
 	}
 
 	function setVolume(v:Float, playTone:Bool = false):Void
@@ -473,8 +591,40 @@ class FlxSoundTray extends Sprite
 		return t * t * (3 - 2 * t);
 	}
 
+	// 打击音行是否可见：**每帧现读 + null 安全**（ClientPrefs.data 声明即 null，
+	// 托盘构造早于 loadPrefs；卡 Preloader 的实例整窗期 data 都是 null，
+	// 直接解引用 = SEGV，见 HitsoundDomain.isEnabled 注释）
+	inline function hitsRowVisible():Bool
+	{
+		return HitsoundDomain.isEnabled();
+	}
+
+	inline function baseHColl():Float
+	{
+		return hitsRowVisible() ? H_COLL_HITS : H_COLL;
+	}
+
+	inline function baseHExp():Float
+	{
+		return hitsRowVisible() ? H_EXP_HITS : H_EXP;
+	}
+
 	inline function volTrackX():Float return TRACK_X_COLL + (TRACK_X_EXP - TRACK_X_COLL) * _easeT;
-	inline function volTrackY():Float return TRACK_Y_COLL + (TRACK_Y_EXP - TRACK_Y_COLL) * _easeT;
+
+	// VOLUME 轨道 y：折叠态在打击音行存在时上移让位；展开态在打击音行存在时下移
+	inline function volTrackY():Float
+	{
+		var cy:Float = hitsRowVisible() ? VOL_TRACK_Y_COLL_HITS : TRACK_Y_COLL;
+		var ey:Float = hitsRowVisible() ? VOL_TRACK_Y_EXP_HITS : TRACK_Y_EXP;
+		return cy + (ey - cy) * _easeT;
+	}
+
+	// 打击音轨道 y（x/宽复用 VOLUME 轨道，两行同宽对齐）
+	inline function hitsTrackY():Float
+	{
+		return HITS_TRACK_Y_COLL + (HITS_TRACK_Y_EXP - HITS_TRACK_Y_COLL) * _easeT;
+	}
+
 	inline function volTrackW():Float return TRACK_W_COLL + (TRACK_W_EXP - TRACK_W_COLL) * _easeT;
 
 	static inline function FlxMathBound(v:Float):Float
@@ -502,14 +652,18 @@ class FlxSoundTray extends Sprite
 		graphics.drawRoundRect(1, 1, w - 2, h - 2, 18, 18);
 		graphics.lineStyle(0);
 
-		// ---- 音量行（两态共有，位置插值）----
+		// ---- 音量行（两态共有，位置插值；折叠/展开 y 随打击音行显隐）----
 		var tx:Float = volTrackX();
 		var ty:Float = volTrackY();
 		var tw:Float = volTrackW();
+		var volLabelYColl:Float = hitsRowVisible() ? 8 : (Math.round((H_COLL - 30) / 2) + 2);
+		var volPctYColl:Float = hitsRowVisible() ? 7 : (Math.round((H_COLL - 30) / 2) + 1);
+		var volLabelYExp:Float = hitsRowVisible() ? 142 : 122;
+		var volPctYExp:Float = hitsRowVisible() ? 138 : 118;
 		labelTxt.x = 20 + (24 - 20) * t;
-		labelTxt.y = Math.round((H_COLL - 30) / 2) + 2 + (122 - (Math.round((H_COLL - 30) / 2) + 2)) * t;
+		labelTxt.y = volLabelYColl + (volLabelYExp - volLabelYColl) * t;
 		pctTxt.x = (W_COLL - 82) + (506 - (W_COLL - 82)) * t;
-		pctTxt.y = Math.round((H_COLL - 30) / 2) + 1 + (118 - (Math.round((H_COLL - 30) / 2) + 1)) * t;
+		pctTxt.y = volPctYColl + (volPctYExp - volPctYColl) * t;
 
 		var vol:Float = FlxG.sound.muted ? 0 : FlxG.sound.volume;
 		var fillW:Float = tw * vol;
@@ -536,6 +690,51 @@ class FlxSoundTray extends Sprite
 			graphics.drawCircle(tx + fillW, ty + TRACK_H / 2, HANDLE_R);
 			graphics.endFill();
 			graphics.lineStyle(0);
+		}
+
+		// ---- 打击音行（仅打击音开启时出现；与 VOLUME 行同宽对齐，独立通道不受主静音影响）----
+		if (hitsRowVisible())
+		{
+			var hy:Float = hitsTrackY();
+			var hvol:Float = FlxMathBound(ClientPrefs.data.hitsoundVolume);
+
+			hitsLabelTxt.visible = true;
+			hitsLabelTxt.alpha = 1;
+			hitsLabelTxt.x = 20 + (24 - 20) * t;
+			hitsLabelTxt.y = 52 + (182 - 52) * t;
+
+			hitsPctTxt.visible = true;
+			hitsPctTxt.alpha = 1;
+			hitsPctTxt.text = Math.round(hvol * 100) + "%";
+			hitsPctTxt.textColor = themeAccent();
+			hitsPctTxt.x = (W_COLL - 82) + (506 - (W_COLL - 82)) * t;
+			hitsPctTxt.y = 51 + (178 - 51) * t;
+
+			// 轨道背景
+			graphics.beginFill(0xFF2B2838);
+			graphics.drawRoundRect(tx, hy, tw, TRACK_H, TRACK_H / 2, TRACK_H / 2);
+			graphics.endFill();
+			graphics.lineStyle(1, 0xFF4A4660, 1, true);
+			graphics.drawRoundRect(tx, hy, tw, TRACK_H, TRACK_H / 2, TRACK_H / 2);
+			graphics.lineStyle(0);
+
+			// 已调部分 + 圆钮
+			if (hvol > 0)
+			{
+				graphics.beginFill(themeAccent());
+				graphics.drawRoundRect(tx, hy, tw * hvol, TRACK_H, TRACK_H / 2, TRACK_H / 2);
+				graphics.endFill();
+				graphics.lineStyle(2.5, 0xFF23202E, 1, true);
+				graphics.beginFill(0xFFF4F7FF);
+				graphics.drawCircle(tx + tw * hvol, hy + TRACK_H / 2, HANDLE_R);
+				graphics.endFill();
+				graphics.lineStyle(0);
+			}
+		}
+		else
+		{
+			hitsLabelTxt.visible = false;
+			hitsPctTxt.visible = false;
 		}
 
 		// ---- 播放器内容（随形变淡入/淡出 + 等比缩放，收起时用快照，不读实时音频）----
@@ -630,6 +829,7 @@ class FlxSoundTray extends Sprite
 
 		lastDrawVol = FlxG.sound.volume;
 		lastDrawMuted = FlxG.sound.muted;
+		lastDrawHits = hitsVolumeNow();
 	}
 
 	// type: 0=暂停图标（两条竖杠） 1=播放图标（三角）

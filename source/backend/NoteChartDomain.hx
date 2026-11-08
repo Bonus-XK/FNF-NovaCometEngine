@@ -1070,7 +1070,8 @@ class NoteChartDomain
 				ps.currentReplay.addEvent(note.chartSeq, note.strumTime, note.noteData, 'sus');
 			if (ClientPrefs.data.hitsoundVolume > 0 && !note.hitsoundDisabled && !(ps.botHitBatch && ps.botBatchHitsoundDone))
 			{
-				FlxG.sound.play(Paths.sound(note.hitsound), ClientPrefs.data.hitsoundVolume);
+				// 默认档 'hitsound' 才替换为玩家自定义打击音（HitsoundDomain）；音符类型显式指定的音效原样走 Paths
+				FlxG.sound.play(HitsoundDomain.soundForNote(note.hitsound), ClientPrefs.data.hitsoundVolume);
 				if (ps.botHitBatch) ps.botBatchHitsoundDone = true;
 			}
 

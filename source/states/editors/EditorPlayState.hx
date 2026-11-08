@@ -2,6 +2,7 @@ package states.editors;
 import backend.Lang;
 
 import backend.AccuracyDomain;
+import backend.HitsoundDomain;
 import backend.Song;
 import backend.Section;
 import backend.Rating;
@@ -92,7 +93,7 @@ class EditorPlayState extends MusicBeatSubstate
 			FlxG.sound.music.stop();
 
 		cachePopUpScore();
-		if(ClientPrefs.data.hitsoundVolume > 0) Paths.sound('hitsound');
+		if(ClientPrefs.data.hitsoundVolume > 0) HitsoundDomain.resolveSound(ClientPrefs.data.hitsoundName);
 
 		/* setting up Editor PlayState stuff */
 		var bg:FlxSprite = new FlxSprite().loadGraphic(Paths.image('menuDesat'));
@@ -771,7 +772,7 @@ class EditorPlayState extends MusicBeatSubstate
 		{
 			note.wasGoodHit = true;
 			if (ClientPrefs.data.hitsoundVolume > 0 && !note.hitsoundDisabled)
-				FlxG.sound.play(Paths.sound('hitsound'), ClientPrefs.data.hitsoundVolume);
+				FlxG.sound.play(HitsoundDomain.soundForNote('hitsound'), ClientPrefs.data.hitsoundVolume);
 
 			if(note.hitCausesMiss) {
 				noteMiss(note);
