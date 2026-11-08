@@ -466,6 +466,8 @@ class NoteOffsetState extends MusicBeatState
 			if(zoomTween != null) zoomTween.cancel();
 			if(beatTween != null) beatTween.cancel();
 
+			// 偏移值全程只写内存：返回时落盘，否则在校准页杀进程会丢整次校准
+			ClientPrefs.saveSettings();
 			persistentUpdate = false;
 			CustomFadeTransition.nextCamera = camOther;
 			MusicBeatState.switchState(new options.OptionsState());
