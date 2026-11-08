@@ -28,6 +28,7 @@ class TextInputPrompt extends MusicBeatSubstate
 	var buttonCancel:FlxUIButton;
 
 	var initialValue:String = '';
+	var backPending:Bool = false;
 	var titleText:String = '';
 	var helpText:String = '';
 
@@ -136,11 +137,25 @@ class TextInputPrompt extends MusicBeatSubstate
 		FlxG.stage.focus = inputField;
 	}
 
+	#if mobile
+	/** 手机端按系统返回键 / 左上角 X：关闭输入框回到上一层，不退出游戏。 */
+	override public function onAndroidBack():Bool
+	{
+		backPending = true;
+		return true;
+	}
+	#end
+
 	override public function update(elapsed:Float):Void
 	{
 		super.update(elapsed);
-		// 只用 ESC 关闭（Backspace 要留给输入框删除字母，不能用 controls.BACK）
-		if (FlxG.keys.justPressed.ESCAPE) close();
+		// 只用 ESC 关闭（Backspace 要留给输入框删除字母，不能用 controls.BACK）；
+		// 手机端返回键由 onAndroidBack 标记，合并到这里只 close 一次。
+		if (FlxG.keys.justPressed.ESCAPE || backPending)
+		{
+			backPending = false;
+			close();
+		}
 	}
 
 	override public function close():Void

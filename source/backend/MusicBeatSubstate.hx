@@ -57,8 +57,8 @@ class MusicBeatSubstate extends FlxSubState
 		backend.ModInstaller.update(elapsed);
 		#end
 		#if mobile
-		// 安卓返回键 / 虚拟返回键（左上角 X）：默认退出游戏回到桌面；
-		// 子类可重写 onAndroidBack 拦截（如暂停菜单：返回=继续游戏）
+		// 安卓系统返回键 / 虚拟返回键（左上角 X）：返回上一级，禁止直接退出进程
+		// （skills/meteoric-mobile/SKILL.md「返回键不退出游戏」）。
 		// （虚拟按键布局设置界面用自己的返回键保存并退出，这里跳过系统返回键和虚拟 X）
 		var isControlsSubstate:Bool = Std.isOfType(this, objects.MobileControlsSubState);
 		var androidBack:Bool = false;
@@ -71,14 +71,12 @@ class MusicBeatSubstate extends FlxSubState
 			if (!onAndroidBack())
 			{
 				// 如果当前子状态已经用 controls.BACK 处理了返回键（例如选项子菜单返回上一级），
-				// 就不要在这里强制退出，避免“刚返回上一级又立刻退出游戏”。
-				#if android
+				// 就不要再兜底，避免“刚返回上一级又触发一次返回”。
+				// 守卫必须全平台生效：iOS 与虚拟 X 路径此前被 #if android 漏掉，会直接杀进程。
 				if (!controls.BACK)
-				#end
 				{
 					FlxG.sound.play(Paths.sound('cancelMenu'));
-					Sys.exit(0);
-					return;
+					onAndroidBackUnhandled();
 				}
 			}
 		}
@@ -121,12 +119,18 @@ class MusicBeatSubstate extends FlxSubState
 
 	/**
 	 * 安卓返回键 / 虚拟返回键（左上角 X）按下时的回调。
-	 * 返回 true 表示该按键已被本子状态处理（不再退出游戏）；默认返回 false（退出到桌面）。
+	 * 返回 true 表示该按键已被本子状态处理；默认返回 false（交给 onAndroidBackUnhandled 兜底）。
 	 */
 	#if mobile
 	public function onAndroidBack():Bool
 	{
 		return false;
+	}
+
+	/** 返回键未被任何界面处理时的兜底：关闭本子状态 = 返回上一层，绝不退出进程。 */
+	public function onAndroidBackUnhandled():Void
+	{
+		close();
 	}
 	#end
 

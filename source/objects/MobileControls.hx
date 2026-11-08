@@ -151,7 +151,7 @@ class MobileControls extends FlxSpriteGroup
 		}
 	}
 
-	// 菜单模式：A（确认）键（B 取消/返回键已移除：返回用系统返回键/左上角 X 角标）
+	// 菜单模式：A（确认）键（B 键不再自动创建；需要 B 的界面可显式 addPadArrow('back', ...)）
 	function buildMenuButtons():Void
 	{
 		var aBtn:FlxSprite = makePadSprite('a', 0xFF7CFC8A);
@@ -629,10 +629,12 @@ class MobileControls extends FlxSpriteGroup
 		switch (key)
 		{
 			case 'pause': return pauseZone != null ? [pauseZone] : [];
-			// 左上角 X = 返回桌面（退出游戏），不再充当"返回上一级"
+			// 左上角 X = 返回上一级 / 关闭当前界面（由 MusicBeatState/Substate 的返回键兜底处理），
+			// 不再直接退出进程。
 			case 'exit': return backZone != null ? [backZone] : [];
-			// B 键已移除：'back' 不再有虚拟按键命中区（系统返回键/左上角 X 仍可用）
-			case 'back': return [];
+			// 菜单模式不再自动创建 B 键，但显式注册（addPadArrow/addMenuButton）的 back 键
+			// 必须有命中区，否则 GameOverSubstate 的「返回选歌」B 键是死键。
+			case 'back': return padButtons.exists('back') ? padButtons.get('back') : [];
 			case 'accept': return menuMode && padButtons.exists('accept') ? padButtons.get('accept') : [];
 		}
 		return padButtons.exists(key) ? padButtons.get(key) : [];
