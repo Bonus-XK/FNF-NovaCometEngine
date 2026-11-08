@@ -500,7 +500,11 @@ class LoadingState extends MusicBeatState
 		var names:Array<String> = [PlayState.SONG.gfVersion, p2, p1];
 		// 顺带收集 events.json 里 "Change Character" 的目标角色：
 		// 否则这些角色会在 PlayState.create 的 makeEvent 里同步加载图集
-		// （stupid-griefer 实测 3 个事件角色 = 620ms 黑屏卡顿）
+		// （stupid-griefer 实测 3 个事件角色 = 620ms 黑屏卡顿）。
+		// ⚠ 移动端跳过事件角色预载（mobileStreamAudio 同源取舍）：事件角色巨图
+		//（8192²≈268MB/张）全量预载会把老手机推向 LMK 杀进程；触发换人时由
+		// image() 同步兜底解码（代价：换人瞬间一次解码停顿）。桌面内存富余，保持预载。
+		#if !mobile
 		try
 		{
 			var evFile:String = Paths.json(PlayState.SONG.song + '/events');
@@ -531,6 +535,7 @@ class LoadingState extends MusicBeatState
 			}
 		}
 		catch (e:Dynamic) {}
+		#end // !mobile
 		for (name in names)
 			if (name != null && name.length > 0 && !charPreloads.contains(name))
 				charPreloads.push(name);

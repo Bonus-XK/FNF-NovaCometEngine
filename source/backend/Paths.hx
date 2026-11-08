@@ -973,8 +973,9 @@ class Paths
 
 	// ===== 歌曲音频流式（Meteoric Fix 续：Flocc 级 1GB → 400MB 的硬件侧一步）=====
 	// Inst/Voices 不再整首解码驻留 PCM（~20-40MB/首），改 Vorbis 流式 + OpenAL 3×48KB 环形缓冲
-	// （~150KB 常驻，声卡/设备侧混音）。仅桌面（lime_vorbis 原生 CFFI 已启用）；
-	// 移动端沿用全量解码管线，保持既有稳定性。
+	// （~150KB 常驻，声卡/设备侧混音）。桌面恒流式；移动端按 mobileStreamAudio 开关
+	// （老手机内存不足闪退的主要削减项；lime_vorbis 对全部 native 目标默认启用），
+	// 任何失败自动回退全量解码。
 	static var streamedVorbis:Map<String, VorbisFile> = new Map();     // 本次会话仍在用的流句柄
 	static var retiredVorbis:Array<VorbisFile> = [];                    // 延迟一轮释放的流句柄
 	static function clearRetiredVorbis():Void
@@ -986,33 +987,44 @@ class Paths
 
 	// 歌曲音频流式加载：VorbisFile + AudioBuffer.fromVorbisFile → Sound（流式缓冲）。
 	// 任何一步失败自动回退 Sound.fromFile 全量解码（行为与旧版一致，绝不崩）。
+	// 桌面恒流式；移动端按 ClientPrefs.data.mobileStreamAudio（老手机内存不足闪退的主要削减项）。
+	// lime 的 lime-vorbis define 对全部 native 目标默认启用（include.xml:27），Android 可用。
 	public static function streamSongAudio(filePath:String):Sound
 	{
+		var wantStream:Bool;
 		#if desktop
-		clearRetiredVorbis();
-		try
+		wantStream = true;
+		#elseif mobile
+		wantStream = ClientPrefs.data != null && ClientPrefs.data.mobileStreamAudio;
+		#else
+		wantStream = false;
+		#end
+		if (!wantStream) return Sound.fromFile(filePath);
 		{
-			var vf:VorbisFile = VorbisFile.fromFile(filePath);
-			if (vf != null)
+			clearRetiredVorbis();
+			try
 			{
-				var buffer:AudioBuffer = AudioBuffer.fromVorbisFile(vf);
-				if (buffer != null)
+				var vf:VorbisFile = VorbisFile.fromFile(filePath);
+				if (vf != null)
 				{
-					var snd:Sound = Sound.fromAudioBuffer(buffer);
-					if (snd != null)
+					var buffer:AudioBuffer = AudioBuffer.fromVorbisFile(vf);
+					if (buffer != null)
 					{
-						streamedVorbis.set(filePath, vf);
-						return snd;
+						var snd:Sound = Sound.fromAudioBuffer(buffer);
+						if (snd != null)
+						{
+							streamedVorbis.set(filePath, vf);
+							return snd;
+						}
 					}
 				}
+				trace('[Audio] 流式加载不可用，回退全量解码：' + filePath);
 			}
-			trace('[Audio] 流式加载不可用，回退全量解码：' + filePath);
+			catch (e:Dynamic)
+			{
+				trace('[Audio] 流式加载失败，回退全量解码：' + filePath + ' (' + e + ')');
+			}
 		}
-		catch (e:Dynamic)
-		{
-			trace('[Audio] 流式加载失败，回退全量解码：' + filePath + ' (' + e + ')');
-		}
-		#end
 		return Sound.fromFile(filePath);
 	}
 
