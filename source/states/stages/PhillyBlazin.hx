@@ -129,15 +129,10 @@ class PhillyBlazin extends BaseStage
 		}
 		abot.color = 0xFF888888;
 
-		// 按平台分型访问 unspawnNotes（安卓=Note 实体数组；桌面=CastNote 轻量数组；
-		// 交叉 cast 会产生野偏移/野调用 → 静默闪退，见 PhillyStreets 注释）
-		#if android
-		var unspawnNotes:Array<objects.Note> = cast game.unspawnNotes;
+		// 与 PhillyStreets 同款修复：PlayState.unspawnNotes 全平台是 Array<CastNote>，
+		// #if android 分支 cast 成 Array<Note> 会野偏移闪退；直接按声明类型赋值。
+		var unspawnNotes:Array<objects.Note.CastNote> = game.unspawnNotes;
 		for (note in unspawnNotes)
-		#else
-		var unspawnNotes:Array<objects.Note.CastNote> = cast game.unspawnNotes;
-		for (note in unspawnNotes)
-		#end
 		{
 			if(note == null) continue;
 
