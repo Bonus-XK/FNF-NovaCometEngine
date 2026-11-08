@@ -266,6 +266,9 @@ class FPSStatsEditorState extends MusicBeatState
 			// 行序随清单重排 → 开关状态直接吸附（不做滑动）
 			switches[i].setOn(enabled, true);
 
+			// 选中态第三项（§3 三项齐全）：选中行开关全亮，未选中 0.85
+			switches[i].setAlpha(sel ? 1 : 0.85);
+
 			// 排序箭头：仅启用项可移动（边界处灰显）
 			var canUp:Bool = enabled && (k > 0);
 			var canDown:Bool = enabled && (k < list.length - 1);
@@ -517,6 +520,14 @@ class FPSStatsEditorState extends MusicBeatState
 			FlxSpriteUtil.drawRoundRect(spr, 1, 1, w - 2, h - 2, radius, radius, FlxColor.TRANSPARENT, {color: border, thickness: 1.5});
 		spr.scrollFactor.set();
 		return spr;
+	}
+
+	override public function destroy():Void
+	{
+		// ToggleSwitch 位图缓存不走精灵自动回收，必须显式销毁（§4.6 副作用成对）
+		for (i in 1...ROWS)
+			if (switches[i] != null) switches[i].destroy();
+		super.destroy();
 	}
 
 	#if mobile
