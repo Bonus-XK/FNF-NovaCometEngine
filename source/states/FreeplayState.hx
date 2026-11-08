@@ -613,6 +613,10 @@ class FreeplayState extends MusicBeatState
 					if (colorTween != null) colorTween.cancel();
 					FlxG.sound.play(Paths.sound('cancelMenu'));
 					MusicBeatState.switchState(new MainMenuState());
+					// 命中即独占本次点击：必须 return，否则同帧继续走下方曲目行判定——
+					// 列表下滚过 2 首后行热区会盖住按钮圆心，点返回会被二次判定成进曲
+					// （LoadingState 直接 FlxG.switchState 会盖掉这里的返回转场）
+					return;
 				}
 
 				if (hoveredID >= 0 && clickPressed && !overIsland)
@@ -979,10 +983,13 @@ class FreeplayState extends MusicBeatState
 
 	function getHoveredSongID():Int
 	{
-		var wp:FlxPoint = FlxG.mouse.getWorldPosition();
+		var wp:FlxPoint = FlxG.mouse.getScreenPosition(cameras[0], FlxPoint.get());
 		var mx:Float = wp.x;
 		var my:Float = wp.y;
 		wp.put();
+		// 返回按钮（左上 44,16，56×56）周边禁区：曲目本体从 x≈88 起，行热区下限 LIST_X-30 会盖到按钮，
+		// 点按钮右缘/下缘附近（圆外但热区内）不能算选中曲目。禁区只到按钮右缘 +4px，不影响其余行
+		if (mx < 104 && my < 80) return -1;
 		for (i in 0...grpSongs.members.length)
 		{
 			var item:Alphabet = grpSongs.members[i];
