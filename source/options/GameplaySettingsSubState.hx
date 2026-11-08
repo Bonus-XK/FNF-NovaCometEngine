@@ -62,12 +62,14 @@ class GameplaySettingsSubState extends BaseOptionsMenu
 			'oldHealthBar',
 			'bool');
 		addOption(option);
+		option.onChange = syncHealthBarStyle;
 
 		var option:Option = new Option('新版血量条',
 		    '开启后，血量条不再依赖贴图而是自己绘制（白边框 + 内部填充），并自动融合 0.6.3 兼容模式（无阴影）',
 			'newHealthBar',
 			'bool');
 		addOption(option);
+		option.onChange = syncHealthBarStyle;
 
 		var option:Option = new Option('自动暂停',
 			'开启后，游戏窗口失去焦点（切到后台）时会自动暂停',
@@ -116,5 +118,17 @@ class GameplaySettingsSubState extends BaseOptionsMenu
 	function onChangeAutoPause()
 	{
 		FlxG.autoPause = ClientPrefs.data.autoPause;
+	}
+
+	/** 旧双布尔开关切换：把单枚举 healthBarStyle 同步到对应档（两个开关都关 = 经典贴图） */
+	function syncHealthBarStyle()
+	{
+		if (ClientPrefs.data.oldHealthBar)
+			ClientPrefs.data.healthBarStyle = backend.HudStyles.HB_OLD;
+		else if (ClientPrefs.data.newHealthBar)
+			ClientPrefs.data.healthBarStyle = backend.HudStyles.HB_NEW;
+		else
+			ClientPrefs.data.healthBarStyle = backend.HudStyles.HB_CLASSIC;
+		ClientPrefs.saveSettings();
 	}
 }
