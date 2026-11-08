@@ -193,13 +193,18 @@ class SaveMover
 	/** 结构化 JSON：只导出设置类数据（人类可读、体积最小）。 */
 	static function jsonBackup(stamp:String):String
 	{
-		var out:Dynamic = {};
-		out.version = 1;
-		out.timestamp = Date.now();
-		out.engine = 'NovaComet Engine ' + Main.meVersion;
-		out.commit = backend.GitInfo.summary();
-		out.settings = captureSettingsJson();
-		out.keybinds = captureKeybindsJson();
+			// ⚠ 字段必须全部写在字面量里：hxcpp 下对 `{}` 字面量动态补写新字段会走
+		// hx::Object::__SetField 默认实现，直接抛「Invalid field:xxx」
+		//（2026-11-08 实测：重建触发存档迁移 → jsonBackup 首次执行 → 启动即退出 255）。
+		// timestamp 存字符串：Json.stringify 对 Date 对象没有特判，存对象会变成 {}。
+		var out = {
+			version: 1,
+			timestamp: Date.now().toString(),
+			engine: 'NovaComet Engine ' + Main.meVersion,
+			commit: backend.GitInfo.summary(),
+			settings: captureSettingsJson(),
+			keybinds: captureKeybindsJson()
+		};
 		var path:String = backupDir() + BACKUP_PREFIX + 'json-' + stamp + '.json';
 		File.saveContent(path, haxe.Json.stringify(out, '\t'));
 		trace('[Move] 备份(json) → ' + path);
