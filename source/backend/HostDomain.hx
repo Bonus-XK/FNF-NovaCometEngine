@@ -1901,8 +1901,13 @@ class HostDomain
 						// 探针实测（stupid-griefer Parts 墙段）：clip 占 notes 循环 ~55%（306-377µs），
 						// 而 set_clipRect→set_frame 每次自赋值都急切 clipTo+resetFrameSize+dirty。
 						// 离屏段的裁剪是纯浪费——进屏当帧恢复，视觉零差；margin 覆盖箭头尺寸与 zoom 波动。
-						var viewTop:Float = FlxG.camera.scroll.y - 150;
-						var viewBot:Float = FlxG.camera.scroll.y + FlxG.camera.height + 150;
+						// ⚠ 坐标源必须是音符实际所在相机 camHUD（notes.cameras=[camHUD]，音符
+						// scrollFactor=(0,0)，其 y 是 HUD 屏幕坐标），不能用 FlxG.camera（camGame）：
+						// Weekend1 的 PhillyStreets 会 tween camGame.scroll/zoom，用它会把屏内长条
+						// 误判成离屏 → 跳过裁剪 → 长条整根残留，直到 killWindow 超时才消失。
+						var noteCam = ps.camHUD != null ? ps.camHUD : FlxG.camera;
+						var viewTop:Float = noteCam.scroll.y - 150;
+						var viewBot:Float = noteCam.scroll.y + noteCam.height + 150;
 						var ni:Int = 0;
 						while (ni < ps.notes.members.length)
 						{
