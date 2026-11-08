@@ -114,6 +114,26 @@ class FPS extends TextField
 		return mem;
 	}
 
+	/**
+	 * 脚本堆（Haxe GC 堆）：cpp 下为 Gc CURRENT（含未回收垃圾）。
+	 * 2026-10-21 前 Mem 项就是这一口径（当时显示 ~100MB），与物理内存（RSS）并列展示，
+	 * 让「脚本堆」与「进程物理内存（含显存/系统共享）」两个口径同时可见、恢复可比性。
+	 */
+	static function currentHeapBytes():Float
+	{
+		#if (sys && cpp)
+		try
+		{
+			var mb:Float = cpp.vm.Gc.memInfo64(cpp.vm.Gc.MEM_INFO_CURRENT);
+			if (Math.isFinite(mb) && mb > 0) return mb;
+		}
+		catch (e:Dynamic) {}
+		#end
+		var mem:Float = openfl.system.System.totalMemory;
+		if (mem < 0) mem += 4294967296; // totalMemory 是 Int，超过 2GB 会溢出为负数
+		return mem;
+	}
+
 	// 窗口标题栏模式：原始窗口标题（开启标题显示时拼接统计信息，关闭时恢复）
 	var _baseTitle:String = null;
 	// 上一次写入窗口的完整标题（用于检测引擎其他代码是否改过标题）
@@ -341,7 +361,7 @@ class FPS extends TextField
 		{
 			tok = StringTools.trim(tok);
 			if (tok.length == 0 || out.indexOf(tok) >= 0) continue;
-			if (tok == 'Mem' || tok == 'Peak' || tok == 'CPU' || tok == 'Ver' || tok == 'Git') out.push(tok);
+			if (tok == 'Mem' || tok == 'Peak' || tok == 'Heap' || tok == 'CPU' || tok == 'Ver' || tok == 'Git') out.push(tok);
 		}
 		return out;
 	}
@@ -360,6 +380,8 @@ class FPS extends TextField
 		{
 			case 'Mem':
 				out.push('${prefix}Mem: ${formatMem(mem)}');
+			case 'Heap':
+				out.push('${prefix}Heap: ${formatMem(currentHeapBytes())}');
 			case 'Peak':
 				out.push('${prefix}Peak: ${formatMem(_peakMem)}');
 			case 'CPU':
