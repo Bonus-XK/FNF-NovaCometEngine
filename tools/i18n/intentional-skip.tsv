@@ -49,6 +49,7 @@ source/backend/Achievements.hx	通关一首曲目，最终准确率低于 20%（
 source/backend/Achievements.hx	通关一首曲目，最终准确率达到 100%（不可开启练习或自动游玩）	1	成就数据表 RAW：中文为唯一真源，显示走 nameOf/descOf/triggerOf
 source/backend/Achievements.hx	长按任意箭头十秒钟	1	成就数据表 RAW：中文为唯一真源，显示走 nameOf/descOf/triggerOf
 source/backend/Achievements.hx	高分！	1	成就数据表 RAW：中文为唯一真源，显示走 nameOf/descOf/triggerOf
+source/backend/CameraHudDomain.hx	 · 	2	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/backend/CameraHudDomain.hx	歌曲名称	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/backend/ClientPrefs.hx	KE 判定	1	存档值字面量：改了会静默失效（显示由 optionValue.* 负责）
 source/backend/ClientPrefs.hx	PE 判定	2	存档值字面量：改了会静默失效（显示由 optionValue.* 负责）
@@ -210,6 +211,8 @@ source/backend/HostDomain.hx	ms（music.length=	1	诊断日志（trace / Sys.pri
 source/backend/HostDomain.hx	ms）	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/backend/HostDomain.hx	已过时间	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/backend/HostDomain.hx	歌曲名称	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
+source/backend/HudStyles.hx	 · 	3	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
+source/states/PlayState.hx	 · 	2	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/backend/InputDomain.hx	KE 判定	4	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/backend/ModInstallUI.hx	…	1	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/backend/ModInstallUI.hx	下载完成	1	m.title == '安装完成' 状态比较
@@ -661,6 +664,7 @@ source/options/GraphicsSettingsSubState.hx	背景图分辨率	1	Option 兜底原
 source/options/GraphicsSettingsSubState.hx	运行时贴图密排列	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/GraphicsSettingsSubState.hx	长条按压覆盖	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/GraphicsSettingsSubState.hx	高清渲染	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/HUDCustomizeState.hx	歌曲名称	2	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/options/InterfaceSettingsSubState.hx	Combo堆叠	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	FPS显示到窗口标题	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	FPS显示颜色: 	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -669,6 +673,7 @@ source/options/InterfaceSettingsSubState.hx	FPS计数器	1	Option 兜底原文�
 source/options/InterfaceSettingsSubState.hx	Score栏格式	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	\\n改动即时生效：本页当前观感马上更新，其余界面在下次进入时应用新配色。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	\\n青·蓝·紫·品红·橙·金·绿·青绿·红·粉	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	「流星三段」计分簇的内容来源：\\n固定字段 = 分数 + Miss/准度/FC；\\n跟随格式串 = 按上方「Score栏格式」的分段重排（按 | 分段，含 {score} 的段做主行，其余进次行）；\\n格式串解析失败（无 | 分段或无 {score}）时自动回退经典单行	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	两种时间条样式均受此开关控制	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	主题色	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	关闭后，帧数计数器（FPS）将不会显示	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -678,25 +683,33 @@ source/options/InterfaceSettingsSubState.hx	剩余时间	1	Option 兜底原文�
 source/options/InterfaceSettingsSubState.hx	可用变量：\\n{score} 分数 | {misses} Miss | {rank} 评级 | {accuracy} 准度(不含%)\\n{nps} 每秒音符 | {maxnps} 峰值NPS | {fc} FC状态 | {combo} 连击 | {health} 血量百分比	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	同时显示本局峰值（Max）—— {nps} 是滚动 1 秒窗口，遇间奏或长条会掉回 0，峰值才反映真实爆发力。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	否则用主题色（颜色过暗时自动兜底）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	图标软投影	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	已过时间	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	开启后，FPS 计数器下方显示当前音符滚动速度，颜色随速度变化（慢速绿色、中速黄色、快速红色）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	开启后，FPS/内存/峰值内存/CPU 显示在窗口标题栏，屏幕上的计数器隐藏	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	开启后，Score 栏显示每秒收到的音符数（NPS），用于查看自己的读谱速度（不含长条，每秒更新）。\\n	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	开启后，任意堆叠命中（≥2 连打簇，即使没顶破 100%）都会触发：血量显示按该堆叠提供的血量%爆发	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	开启后，屏幕右上角显示总命中数、连击数、Marvelous/Sick/Good/Bad/Shit/Misses 数量	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	开启后，左下角水印（歌名与引擎版本）透明度降到 55%，读谱时更不抢视线	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	开启后，左下角的水印将不会显示	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	开启后，时间条变为黑色圆角样式。已走过部分的填充色：开启「时间条颜色跟随对方」时用对手图标颜色，	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	开启后，时间条填充色跟随对方角色血量条颜色（过暗/过亮时自动兜底）；关闭时使用当前主题色。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	开启后，时间条的文字（剩余/已过时间）移到时间条内部右端显示（14px，黑底与亮色填充上都可读）；\\n「歌曲名称」模式不内嵌（歌名长度不定，会溢出条外）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	开启后，自动游玩 / 回放模式的「AutoPlay / REPLAY」文字变为圆角胶囊徽标（静态不呼吸，16px 小字）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	开启后，血量条上的角色小图标在血条上缘投出柔和的静态阴影（进入对局时绘制一次，无每帧开销）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	开启后，血量条等界面元素将不会显示	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	彩虹	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	新时间条样式	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	方块	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	时间数字内嵌	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	时间条:	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	时间条贴图层级	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	时间条颜色跟随对方	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	显示NPS	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	显示滚动速度	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	歌曲名称	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	水印减淡	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	游玩界面的计分区外观：\\n经典单行 = 上游一行拼接文本（Score/Misses/Rank/Accuracy…）；\\n流星三段 = 血条正下两行簇——主行大号分数，次行「Miss n · 准度 · FC」（Miss>0 整行染红）。\\n切到流星后可继续用下一项「计分簇内容」选择簇里放什么	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	点击查看	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	界面	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	白色	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -707,13 +720,18 @@ source/options/InterfaceSettingsSubState.hx	经典样式（timeBar.png）中贴�
 source/options/InterfaceSettingsSubState.hx	绿色	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	自动	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	自动检测	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	自动游玩徽标	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	自定义 Score 栏文本格式。可用变量：{score} {misses} {rank} {accuracy} {nps} {maxnps} {fc} {combo} {health}。按确认键打开输入框	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	自定义 Score 栏格式	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	蓝色	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	血条上限仍为 100%，仅显示与飞行节奏发生变化	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	血条样式	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	血条溢出图标飞出	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	血条透明度	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	血量条外观：\\n经典贴图 = healthBar.png 贴图（上游原样）；\\n0.6.3 旧版 = 填充裁剪为贴图内部形状（兼容旧模组脚本）；\\n新版自绘 = 白边框 + 内部填充，不依赖贴图；\\n流星圆角 = 黑色圆角底 + 内缩 2px 圆角填充（几何与经典一致，图标位置不变）。\\n旧「旧版/新版血量条」开关由本项接管：切换时自动镜像写回，旧模组脚本读取不受影响	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	计分文字字体: 	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	计分栏样式	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/InterfaceSettingsSubState.hx	计分簇内容	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	设置 FPS 计数器外观：方块为半透明方形徽章（85% 不透明深色圆角底）；经典为无底色多行文本	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	调整血量条的透明度	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/InterfaceSettingsSubState.hx	贴图在上	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -753,7 +771,9 @@ source/options/JudgmentSettingsSubState.hx	只把**评级**换成 Phigros 的档
 source/options/JudgmentSettingsSubState.hx	安全帧数	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/JudgmentSettingsSubState.hx	开启后，准确率权重按实际毫秒偏差在判定档位间连续插值：正中 1.0，贴边降到下一档锚点（Sick→Good→Bad→Shit）。\\n关闭时回到离散锚点权重（Sick=1 / Good=0.67 / Bad=0.34 / Shit=0），与旧版逐位一致。\\n旧回放文件不受此开关影响，永远按录制时口径复现。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/JudgmentSettingsSubState.hx	开启后，最高判定（Sick/45ms）显示为 Marvelous 贴图（KE 1.8 风格）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/JudgmentSettingsSubState.hx	打击音音效	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/JudgmentSettingsSubState.hx	打击音音量	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/JudgmentSettingsSubState.hx	按下音符时播放的打击音。默认用引擎自带打击音（模组可覆盖）；\\n自定义：把 ogg/mp3/wav 放进存档目录的 hitsounds 文件夹，重新打开本页生效	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/JudgmentSettingsSubState.hx	按下音符时，会发出“叮！”的打击音	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/JudgmentSettingsSubState.hx	毫秒加权准确率	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/JudgmentSettingsSubState.hx	评级偏移	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -850,13 +870,11 @@ source/options/ProgrammingSettingsSubState.hx	开启 Meteoric 脚本系统：允
 source/options/ProgrammingSettingsSubState.hx	开启后允许谱面使用音符模表：谱面目录放 modchart.json，或在 Lua 脚本里调 startMod / setMod / set / ease 等函数，\\n可以让音符位移、旋转、缩放、消失（3D 透视可用）。\\n只有带模表数据的谱面才会生效，没有模表数据的谱面零开销、零变化。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，Lua 脚本的停止哨兵按 Psych Engine 0.6.3 的数字约定处理（Function_Continue=0 / Function_Stop=1 / Function_StopLua=2）。\\n0.6.3 老模组的 return Function_StopLua 无效（脚本停不下来）时试试这个	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，关闭强制音符烘焙，兼容 Psych Engine 0.6.3 模组的箭头贴图格式（箭头不显示时试试这个）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
-source/options/ProgrammingSettingsSubState.hx	开启后，按模组的 pack.json 字段与 data/*.lang、data/settings.json 指纹自动探测目标 Psych 版本，\\n并按所属模组自动匹配兼容行为（哨兵语义 / version 全局 / 0.7.3 API），模组管理页显示检测结果。\\n检测不到的模组回退上面的手动开关。默认关闭	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，补全 Psych Engine 0.7.3 的脚本 API 与回调：Lua 侧 getModSetting / removeHScript / getSoundPitch / setSoundPitch / eraseSaveData / setTextAutoSize、\\nsetTextBorder 的 style 参数，以及 5 个 Pre 系回调（preUpdateScore / onKeyPressPre / onKeyReleasePre / goodNoteHitPre / opponentNoteHitPre）。\\n与「Psych 1.0.4 模组兼容」叠加时，命中 Pre 回调可取消（1.0.4 语义）。默认关闭	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，识别 Psych Engine 1.0.4 模组：读取旧目录布局（data/ images/ music/ sounds/ custom_notetypes/ scripts/）与 pack.json / modsList.txt，\\n并恢复 Psych 风格脚本加载（全局 scripts/、歌曲 data/<歌>/、舞台 / 角色 / 音符类型 / 自定义事件的 .lua / .hx）。\\nMeteoric 新目录与 mod.json 仍然优先。默认关闭	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后：F5 = 重建当前界面的状态脚本，Shift+F5 = 重建全局脚本。\\n脚本自己创建的对象要在 destroy() 里清理，否则会残留。\\n需要先打开「脚本系统（总开关）」。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	扫描已启用模组的 source/ 目录，把其中的 class 注册给 HScript：脚本可以 import 后 new，或调用实例 / 静态成员。\\n只支持普通 class；import 必须写在脚本顶部。\\n默认关闭；关闭时脚本行为与旧版完全一致。\\n需要先打开「脚本系统（总开关）」。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	按资源名加载同名脚本：scripting/stages/<舞台名>.hx、scripting/characters/<角色名>.hx、scripting/notes/<音符类型>.hx、scripting/events/<事件名>.hx。\\n每个资源名随对局只加载一次；脚本可获得 stage / character / noteType / eventName 变量。\\n需要先打开「脚本系统（总开关）」。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
-source/options/ProgrammingSettingsSubState.hx	模组引擎版本自动识别	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	模组类库（source/）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	状态脚本（覆盖界面）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	状态重定向	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -991,7 +1009,7 @@ source/states/PlayState.hx	[NoteHoldCover] 检测到模组自带 NoteHoldCover.l
 source/states/PlayState.hx	[Replay] 谱面指纹不匹配，回放取消	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/states/PlayState.hx	剩余时间	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/states/PlayState.hx	无	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
-source/states/PlayState.hx	歌曲名称	4	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
+source/states/PlayState.hx	歌曲名称	5	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/states/PlayState.hx	禁用	2	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/states/PlayState.hx	默认	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/states/TitleState.hx	 墙钟补丁探测=	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）

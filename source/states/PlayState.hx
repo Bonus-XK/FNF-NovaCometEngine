@@ -19,7 +19,9 @@ import backend.WeekData;
 import backend.CameraHudDomain;
 import backend.EventDomain;
 import backend.IconBop;
+import backend.HudStyles;
 import backend.NoteChartDomain;
+import backend.HitsoundDomain;
 import backend.PopupAnim;
 import backend.Song;
 import backend.Section;
@@ -386,6 +388,9 @@ class PlayState extends MusicBeatState
 
 	public var notes:NoteGroup;
 	// 安卓走"直建 Note 对象"最稳定管线（8月17 实测可用）；桌面走 CastNote 轻量管线
+	// ⚠ 该分支当前由 #if false 关闭 → 全平台实际都是 Array<CastNote>。
+	// 若改回 #if android，必须同步改 states/stages/PhillyStreets.hx 与 PhillyBlazin.hx
+	// 的 createPost（它们现按 CastNote 访问），否则按 Note 字段偏移读 = 进 Weekend1 闪退。
 		#if false
 	public var unspawnNotes:Array<Note> = [];
 	#else
@@ -565,6 +570,12 @@ class PlayState extends MusicBeatState
 	public var songTxt:FlxText;
 	public var judgementField:openfl.text.TextField; // 判定计数侧边栏
 	public var timeTxt:FlxText;
+	// 流星计分簇 / 图标投影 / 自动游玩徽标（GameHUD 创建后同步到本类，Lua/HScript 可读写）
+	public var scoreClusterMain:FlxText;
+	public var scoreClusterSub:FlxText;
+	public var iconShadowP1:FlxSprite;
+	public var iconShadowP2:FlxSprite;
+	public var botplayPillBg:FlxSprite;
 	var scoreTxtTween:FlxTween;
 	// scoreTxt 已应用的 setFormat 参数签名（与 CameraHudDomain.updateScore 配合，避免每次重复 setFormat）
 	var _scoreTxtFmtKey:String = '';
@@ -1144,7 +1155,13 @@ class PlayState extends MusicBeatState
 		RecalculateRating();
 
 		//PRECACHING MISS SOUNDS BECAUSE I THINK THEY CAN LAG PEOPLE AND FUCK THEM UP IDK HOW HAXE WORKS
-		if(ClientPrefs.data.hitsoundVolume > 0) precacheList.set('hitsound', 'sound');
+		if(ClientPrefs.data.hitsoundVolume > 0)
+		{
+			if (ClientPrefs.data.hitsoundName == HitsoundDomain.DEFAULT_KEY)
+				precacheList.set('hitsound', 'sound');
+			else
+				HitsoundDomain.resolveSound(ClientPrefs.data.hitsoundName); // 自定义打击音不走 Paths 预缓存链：进曲时预热解码进缓存
+		}
 		precacheList.set('missnote1', 'sound');
 		precacheList.set('missnote2', 'sound');
 		precacheList.set('missnote3', 'sound');
@@ -1516,7 +1533,7 @@ class PlayState extends MusicBeatState
 	public function updateScore(miss:Bool = false) CameraHudDomain.updateScore(this, miss);
 
 	// 是否含 CJK 汉字（用于 scoreTxt 中文字体自动切换）
-	function containsChinese(s:String):Bool
+	public function containsChinese(s:String):Bool
 	{
 		return HostDomain.containsChinese(this, s);
 	}
@@ -3085,15 +3102,6 @@ class PlayState extends MusicBeatState
 		if (daRating == null)
 		{
 			daRating = keJudge ? judgeRatingKE(note) : Conductor.judgeNote(ratingsData, noteDiff / playbackRate);
-			// 非顶格评级采样（前 40 条，之后零开销）
-			if (daRating.name != 'marvelous' && daRating.name != 'sick' && offRatingProbe < 40)
-			{
-				offRatingProbe++;
-				trace('[OFFRATE] n=' + offRatingProbe + ' name=' + daRating.name
-					+ ' strum=' + Std.int(note.strumTime) + ' pos=' + Std.int(Conductor.songPosition)
-					+ ' diff=' + Std.int(note.strumTime - Conductor.songPosition)
-					+ ' ctrl=' + cpuControlled + ' seq=' + note.chartSeq);
-			}
 		}
 
 		var scoreMult:Int = (cappedMult != null) ? cappedMult : Std.int(note.density);
@@ -3544,8 +3552,6 @@ class PlayState extends MusicBeatState
 		HostDomain.clampGameplayTotals(this);
 	}
 
-	var offRatingProbe:Int = 0; // 非顶格评级采样计数（前 40 条，零持续开销）
-
 	public static function cancelMusicFadeTween() {
 		HostDomain.cancelMusicFadeTween();
 	}
@@ -3662,10 +3668,27 @@ class GameHUD
 	public var timeBarBG:AttachedSprite;
 	public var botplayTxt:FlxText;
 	public var judgementField:openfl.text.TextField; // 判定计数侧边栏（openfl 直接渲染，部分着色）
+	// ---- 流星计分簇（scoreHudStyle=meteor）：血条正下「分数主行 + Miss/准度/FC 次行」两行 ----
+	public var scoreClusterMain:FlxText;
+	public var scoreClusterSub:FlxText;
+	// ---- 图标软投影（iconDropShadow）：血条上缘静态软投影，x 每帧跟随图标 ----
+	public var iconShadowP1:FlxSprite;
+	public var iconShadowP2:FlxSprite;
+	// ---- 自动游玩胶囊徽标（botplayPill）：botplayTxt 的圆角底，尺寸 create 画一次 ----
+	public var botplayPillBg:FlxSprite;
 
 	var st:PlayState;            // 宿主对局
 	var lastHpPercent:Float = 50;
 	var healthOverlayDir:Int = -1; // 血量阴影滚动方向：-1 向左（回血） / +1 向右（掉血）
+	var _timeInline:Bool = false; // 时间数字内嵌（build 时定死；运行中改设置走重开生效）
+	var _clusterFallback:Bool = false; // 计分簇格式串解析失败回退单行（CameraHudDomain.updateScore 写入）
+	// 计分簇整数签名缓存（值未变时连字符串构建都跳过，CameraHudDomain.updateScore 消费）
+	var _cMain:Int = -1;          // 主行 = songScore
+	var _cMisses:Int = -1;        // 次行签名 = misses
+	var _cAcc:Int = -1;           // 次行签名 = ratingPercent*10000 取整
+	var _cFC:String = '\u0001';   // 次行签名 = ratingFC（初始哨兵）
+	var _cFmtSub:String = '\u0001'; // format 档次行文本缓存（字符串比对）
+	var _cFmtMain:String = '\u0001'; // format 档主行文本缓存
 	// 血条溢出图标飞出（iconFlyOverflow）：超出 100% 瞬间的向外冲量（负=沿填充方向滑出条外），
 	// 随后被 100% 上限慢速拉回 —— 100% 上限原样保留，图标只是“飞出去再被拉回来”。
 	// iconFlyTarget = 目标推出距离（只增不减，新爆发顶替旧目标）；iconFlyOff = 实际位移（向目标靠拢）
@@ -3758,6 +3781,18 @@ class GameHUD
 		if (ClientPrefs.data.downScroll && !st.isPhigrosStyle) timeTxt.y = timeBarY - 25;
 		if (ClientPrefs.data.timeBarType == '歌曲名称') timeTxt.text = PlayState.SONG.song;
 
+		// 时间数字内嵌（timeTxtInline）：进条内右端 14px（黑描边兜底，黑底/亮填充上均可读）。
+		// 「歌曲名称」模式文本是变长歌名，内嵌会溢出条外 → 保持经典布局（开关只作用于时间数字）。
+		_timeInline = ClientPrefs.data.timeTxtInline && ClientPrefs.data.timeBarType != '歌曲名称';
+		if (_timeInline)
+		{
+			timeTxt.size = HudStyles.TIME_INLINE_SIZE;
+			timeTxt.color = HudStyles.TIME_INLINE_COLOR;
+			timeTxt.borderSize = 1.25;
+			// 位置由 GameHUD.update 每帧对齐（HudStyles.layoutInlineTimeTxt），此处先落到条内避免首帧闪跳
+			timeTxt.y = timeBarY + (timeBar.bg.height - timeTxt.height) / 2;
+		}
+
 		timeBarBG = new AttachedSprite('timeBar');
 		timeBarBG.x = timeBar.x;
 		timeBarBG.y = timeBar.y;
@@ -3806,7 +3841,7 @@ class GameHUD
 		healthBarOverlay = new FlxTiledSprite(Paths.image('healthBarOverlay'), Std.int(healthBar.bg.width), Std.int(healthBar.bg.height));
 		healthBarOverlay.y = healthBar.y;
 		healthBarOverlay.scrollFactor.set();
-		healthBarOverlay.visible = (!ClientPrefs.data.hideHud && ClientPrefs.data.healthBarOverlay && !ClientPrefs.data.oldHealthBar && !ClientPrefs.data.newHealthBar);
+		healthBarOverlay.visible = (!ClientPrefs.data.hideHud && ClientPrefs.data.healthBarOverlay && !ClientPrefs.data.oldHealthBar && !ClientPrefs.data.newHealthBar && HudStyles.healthBarTextureVisible());
 		healthBarOverlay.color = FlxColor.BLACK;
 		healthBarOverlay.blend = MULTIPLY;
 		healthBarOverlay.x = healthBar.x;
@@ -3814,7 +3849,27 @@ class GameHUD
 		healthBarOverlay.antialiasing = ClientPrefs.data.antialiasing;
 		st.add(healthBarOverlay);
 		if (ClientPrefs.data.downScroll && !st.isPhigrosStyle) healthBarOverlay.y = healthBar.y;
-		if (ClientPrefs.data.oldHealthBar || ClientPrefs.data.newHealthBar) healthBarOverlay.visible = false;
+		if (ClientPrefs.data.oldHealthBar || ClientPrefs.data.newHealthBar || !HudStyles.healthBarTextureVisible()) healthBarOverlay.visible = false;
+
+		// 图标软投影（iconDropShadow）：共享位图两个精灵，create 各画一次、运行时零重绘；
+		// x 每帧跟随图标（update），y 钉在血条上缘。⚠ 先于图标 add（投影在图标下层）
+		if (ClientPrefs.data.iconDropShadow)
+		{
+			var shadowBmp = HudStyles.buildIconShadowBitmap();
+			iconShadowP1 = new FlxSprite().makeGraphic(shadowBmp.width, shadowBmp.height, FlxColor.TRANSPARENT);
+			iconShadowP1.pixels = shadowBmp;
+			iconShadowP1.alpha = HudStyles.ICON_SHADOW_ALPHA;
+			iconShadowP1.antialiasing = ClientPrefs.data.antialiasing;
+			iconShadowP1.y = healthBar.y - iconShadowP1.height / 2 + 2;
+			st.add(iconShadowP1);
+
+			iconShadowP2 = new FlxSprite().makeGraphic(shadowBmp.width, shadowBmp.height, FlxColor.TRANSPARENT);
+			iconShadowP2.pixels = shadowBmp;
+			iconShadowP2.alpha = HudStyles.ICON_SHADOW_ALPHA;
+			iconShadowP2.antialiasing = ClientPrefs.data.antialiasing;
+			iconShadowP2.y = healthBar.y - iconShadowP2.height / 2 + 2;
+			st.add(iconShadowP2);
+		}
 
 		iconP1 = new HealthIcon(st.boyfriend.healthIcon, true);
 		iconP1.y = healthBar.y - 75;
@@ -3845,22 +3900,76 @@ class GameHUD
 		scoreTxt.visible = !ClientPrefs.data.hideHud;
 		st.add(scoreTxt);
 
+		// 流星计分簇（scoreHudStyle=meteor）：主行分数 26px + 次行 Miss/准度/FC 16px。
+		// 极简血条模式让位（scoreTxt 嵌入血条，见 HudStyles.clusterActive）。
+		if (HudStyles.clusterActive())
+		{
+			var mainFont:String = ClientPrefs.data.scoreTxtFont == "Bahnschrift"
+				? Paths.font("bahnschrift.ttf") : Paths.font("vcr.ttf");
+			scoreClusterMain = new FlxText(hudScoreOff[0], scoreY + hudScoreOff[1], FlxG.width, "", HudStyles.CLUSTER_MAIN_SIZE);
+			scoreClusterMain.setFormat(mainFont, HudStyles.CLUSTER_MAIN_SIZE, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+			scoreClusterMain.borderSize = 1.6;
+			scoreClusterMain.scrollFactor.set();
+			st.add(scoreClusterMain);
+
+			scoreClusterSub = new FlxText(hudScoreOff[0], scoreY + hudScoreOff[1] + HudStyles.CLUSTER_MAIN_STEP, FlxG.width, "", HudStyles.CLUSTER_SUB_SIZE);
+			// 次行固定 future.ttf：分隔符 U+00B7（·）vcr/bahnschrift 没有这个字形（整块空白），
+			// future 有且覆盖 CJK（format 档自定义中文标签直接可显示）——不必再做含 CJK 换字体
+			scoreClusterSub.setFormat(Paths.font('future.ttf'), HudStyles.CLUSTER_SUB_SIZE, HudStyles.CLUSTER_SUB_COLOR, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+			scoreClusterSub.borderSize = 1.25;
+			scoreClusterSub.scrollFactor.set();
+			st.add(scoreClusterSub);
+			// 上滚布局：簇整体压在经典 score 行的区间内（主行上移一行，次行**落到经典 score 行**），底部不越屏；
+			// 下滚布局：主行在顶（经典位），次行顺势向下。
+			if (!ClientPrefs.data.downScroll || st.isPhigrosStyle)
+			{
+				scoreClusterMain.y -= HudStyles.CLUSTER_MAIN_STEP;
+				scoreClusterSub.y -= HudStyles.CLUSTER_MAIN_STEP;
+			}
+			// 首帧内容由 CameraHudDomain.updateScore 填充（整数签名缓存）
+			scoreClusterMain.text = '0';
+			scoreClusterSub.text = '';
+		}
+
 		var hudWmOff:Array<Float> = st.hudGetOffset('watermark');
 		songTxt = new FlxText(12 + hudWmOff[0], scoreY + hudWmOff[1], 0, "", 12);
 		songTxt.setFormat(Paths.font("future.ttf"), 15, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+		songTxt.wordWrap = false; // 两行水印靠 \n 显式断行，关自动折行（UI-DESIGN §2.1）
 		songTxt.scrollFactor.set();
 		songTxt.borderSize = 1;
 		songTxt.visible = (!ClientPrefs.data.hideHud && !ClientPrefs.data.hideWatermark);
+		if (ClientPrefs.data.watermarkDim) songTxt.alpha = HudStyles.WATERMARK_DIM_ALPHA;
 		st.add(songTxt);
-		songTxt.text = st.curSong + " (" + st.storyDifficultyText + ") " + Lang.tOr('play.watermarkSuffix', "| 流星引擎 v") + Main.meVersion;
+		// 两行水印：曲目 - 难度 / 引擎 版本 + 兼容模式（与预览共用 HudStyles.buildWatermark）
+		songTxt.text = HudStyles.buildWatermark(st.curSong, st.storyDifficultyText, backend.Mods.currentModDirectory);
+		// 上滚布局：整体上移一行，让第二行（引擎行）底边落在经典单行的底边位置（不越屏）；
+		// 下滚布局：从顶部向下生长，无需处理
+		if (!ClientPrefs.data.downScroll || st.isPhigrosStyle)
+			songTxt.y -= songTxt.height / 2;
 
 		botplayTxt = new FlxText(400, timeBar.y + 55, FlxG.width - 800, st.replayMode ? "REPLAY" : "AutoPlay", 32);
 		botplayTxt.setFormat(Paths.font("vcr.ttf"), 32, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		botplayTxt.scrollFactor.set();
 		botplayTxt.borderSize = 1.25;
 		botplayTxt.visible = st.cpuControlled || st.replayMode;
-		st.add(botplayTxt);
 		if (ClientPrefs.data.downScroll && !st.isPhigrosStyle) botplayTxt.y = timeBar.y - 78;
+
+		// 自动游玩徽标（botplayPill）：文字降到 16px 静态（呼吸关闭），底部圆角胶囊 hug 文本。
+		// REPLAY/AutoPlay 复用同款；pill 底 create 画一次、**先于文字 add**（胶囊在文字下层），
+		// 位置由 update 跟随 botplayTxt。
+		if (ClientPrefs.data.botplayPill)
+		{
+			botplayTxt.size = HudStyles.CLUSTER_SUB_SIZE;
+			botplayTxt.borderSize = 1.25;
+			var pillW:Int = Std.int(Math.max(botplayTxt.textField.textWidth + 28, 60));
+			var pillH:Int = Std.int(Math.max(botplayTxt.textField.textHeight + 10, 26));
+			botplayPillBg = HudStyles.buildPillSprite(pillW, pillH);
+			botplayPillBg.scrollFactor.set();
+			botplayPillBg.alpha = 0.9;
+			botplayPillBg.antialiasing = ClientPrefs.data.antialiasing;
+			st.add(botplayPillBg);
+		}
+		st.add(botplayTxt);
 
 		// ---- 判定计数侧边栏（openfl TextField 直接渲染，支持部分着色；默认左侧中间） ----
 		var jcOff:Array<Float> = st.hudGetOffset('judgementTxt');
@@ -3894,6 +4003,11 @@ class GameHUD
 		timeBar.cameras = [st.camHUD];
 		timeBarBG.cameras = [st.camHUD];
 		timeTxt.cameras = [st.camHUD];
+		if (scoreClusterMain != null) scoreClusterMain.cameras = [st.camHUD];
+		if (scoreClusterSub != null) scoreClusterSub.cameras = [st.camHUD];
+		if (iconShadowP1 != null) iconShadowP1.cameras = [st.camHUD];
+		if (iconShadowP2 != null) iconShadowP2.cameras = [st.camHUD];
+		if (botplayPillBg != null) botplayPillBg.cameras = [st.camHUD];
 
 		// 同步到 PlayState 公开字段（Lua/Hscript getProperty/setProperty 兼容）
 		st.healthBar = healthBar;
@@ -3908,6 +4022,11 @@ class GameHUD
 		st.scoreTxt = scoreTxt;
 		st.songTxt = songTxt;
 		st.botplayTxt = botplayTxt;
+		st.scoreClusterMain = scoreClusterMain;
+		st.scoreClusterSub = scoreClusterSub;
+		st.iconShadowP1 = iconShadowP1;
+		st.iconShadowP2 = iconShadowP2;
+		st.botplayPillBg = botplayPillBg;
 
 		enforce();
 	}
@@ -3921,11 +4040,26 @@ class GameHUD
 		// baseY 取 `healthBar.y - 75`，与 CameraHudDomain.hudRelayout 的定位口径一致（跳跃档在此之上叠加位移）。
 		IconBop.update(iconP1, iconP2, elapsed, st.playbackRate, st.healthBar.y - 75);
 
-		// botplay 标签呼吸
+		// botplay 标签：胶囊徽标档 = 静态（α 固定 0.9，无呼吸），只跟随文字位置；
+		// 经典档 = 上游呼吸原样保留
 		if (botplayTxt != null && botplayTxt.visible)
 		{
-			st.botplaySine += 180 * elapsed;
-			botplayTxt.alpha = 1 - Math.sin((Math.PI * st.botplaySine) / 180);
+			if (botplayPillBg != null)
+			{
+				botplayTxt.alpha = 1;
+				botplayPillBg.visible = true;
+				botplayPillBg.x = FlxG.width / 2 - botplayPillBg.width / 2;
+				botplayPillBg.y = botplayTxt.y + (botplayTxt.height - botplayPillBg.height) / 2;
+			}
+			else
+			{
+				st.botplaySine += 180 * elapsed;
+				botplayTxt.alpha = 1 - Math.sin((Math.PI * st.botplaySine) / 180);
+			}
+		}
+		else if (botplayPillBg != null)
+		{
+			botplayPillBg.visible = false;
 		}
 
 		// 图标强绑定血量条：x 跟随 barCenter，y 跟随血量条
@@ -3978,6 +4112,16 @@ class GameHUD
 		// 胜利小图标（OSEngine/FNF PR#138 语义）：3 帧 = [0 正常 / 1 劣势 / 2 胜利]，2 帧兼容旧图标
 		iconP1.animation.curAnim.curFrame = iconFrame(iconP1, healthBar.percent, true);
 		iconP2.animation.curAnim.curFrame = iconFrame(iconP2, healthBar.percent, false);
+
+		// 图标软投影：x 跟随图标中心（图标 150 宽），y 在 create 钉死后不再动
+		if (iconShadowP1 != null && iconShadowP1.visible)
+			iconShadowP1.x = iconP1.x + 75 - iconShadowP1.width / 2 + iconFlyOff;
+		if (iconShadowP2 != null && iconShadowP2.visible)
+			iconShadowP2.x = iconP2.x + 75 - iconShadowP2.width / 2 + iconFlyOff;
+
+		// 时间数字内嵌：每帧对齐到时间条内右端（秒级文本变化，textWidth 有 OpenFL 缓存）
+		if (_timeInline && timeTxt != null && timeTxt.visible)
+			HudStyles.layoutInlineTimeTxt(timeTxt, timeBar.x, timeBar.bg.width, timeBar.y, timeBar.bg.height);
 
 		// 血量阴影滚动：方向随推条方向（回血向左、掉血向右）
 		var hpDelta:Float = healthBar.percent - lastHpPercent;
@@ -4126,6 +4270,68 @@ class GameHUD
 			judgementField.setTextFormat(judgementLightRed, lastStart, txt.length); // Misses
 	}
 
+	// ==================== 流星计分簇 ====================
+
+	/**
+	 * 流星计分簇内容更新（CameraHudDomain.updateScore 每次记分后调用）。
+	 * 签名缓存：值未变时连字符串构建都跳过（判定侧栏同款纪律）。
+	 * format 档解析失败置 _clusterFallback = true → enforce 回退经典单行。
+	 */
+	public function updateCluster(ps:PlayState, fontPath:String):Void
+	{
+		if (scoreClusterMain == null) return;
+		var fallback:Bool = false;
+		if (ClientPrefs.data.scoreClusterSource == HudStyles.CLUSTER_FORMAT)
+		{
+			// 跟随格式串：scoreTxt.text 已完成逐变量替换，直接按段拆。
+			// 解析失败（无 | 分段 / 无 {score} / 段数被 showNPS 注入改写）→ 回退经典单行。
+			var ct:Null<backend.HudStyles.ClusterText> = HudStyles.buildClusterFromFormat(ClientPrefs.data.scoreTxtFormat, ps.scoreTxt.text);
+			if (ct == null)
+			{
+				fallback = true;
+			}
+			else
+			{
+				if (_cFmtMain != ct.main)
+				{
+					_cFmtMain = ct.main;
+					scoreClusterMain.text = ct.main;
+				}
+				if (_cFmtSub != ct.sub)
+				{
+					_cFmtSub = ct.sub;
+					// 次行已固定 future.ttf（build 时），含 CJK 的自定义标签直接可显示
+					scoreClusterSub.text = ct.sub;
+				}
+				var wantColor:FlxColor = ps.songMisses > 0 ? HudStyles.CLUSTER_DANGER_COLOR : HudStyles.CLUSTER_SUB_COLOR;
+				if (scoreClusterSub.color != wantColor) scoreClusterSub.color = wantColor;
+			}
+		}
+		else
+		{
+			// 固定字段：整数签名缓存 —— 值不变时连字符串构建都跳过（判定侧栏同款纪律）
+			var scoreInt:Int = I64.toIntSafe(ps.songScore);
+			if (scoreInt != _cMain)
+			{
+				_cMain = scoreInt;
+				scoreClusterMain.text = Std.string(scoreInt);
+			}
+			var missesInt:Int = I64.toIntSafe(ps.songMisses);
+			var accKey:Int = Std.int(ps.ratingPercent * 10000);
+			if (missesInt != _cMisses || accKey != _cAcc || ps.ratingFC != _cFC)
+			{
+				_cMisses = missesInt; _cAcc = accKey; _cFC = ps.ratingFC;
+				var accStr:String = Std.string(CoolUtil.floorDecimal(ps.ratingPercent * 100, 2));
+				var subTxt:String = 'Miss ' + missesInt + ' · ' + accStr + '%'
+					+ (ps.ratingFC.length > 0 ? ' · ' + ps.ratingFC : '');
+				scoreClusterSub.text = subTxt;
+				var wantColor:FlxColor = missesInt > 0 ? HudStyles.CLUSTER_DANGER_COLOR : HudStyles.CLUSTER_SUB_COLOR;
+				if (scoreClusterSub.color != wantColor) scoreClusterSub.color = wantColor;
+			}
+		}
+		_clusterFallback = fallback;
+	}
+
 	// ==================== 可见性权威 ====================
 
 	/**
@@ -4143,15 +4349,28 @@ class GameHUD
 		if (healthBar != null)
 		{
 			healthBar.visible = !hide;
-			healthBar.setNewStyle(ClientPrefs.data.newHealthBar);
+			healthBar.setStyle(ClientPrefs.data.healthBarStyle);
 		}
-		if (healthBarOverlay != null) healthBarOverlay.visible = !hide && ClientPrefs.data.healthBarOverlay && !ClientPrefs.data.oldHealthBar && !ClientPrefs.data.newHealthBar && !minimal;
+		if (healthBarOverlay != null) healthBarOverlay.visible = !hide && ClientPrefs.data.healthBarOverlay && !ClientPrefs.data.oldHealthBar && !ClientPrefs.data.newHealthBar && !minimal && HudStyles.healthBarTextureVisible();
 		if (iconP1 != null) iconP1.visible = !hide && !minimal;
 		if (iconP2 != null) iconP2.visible = !hide && !minimal;
-		if (scoreTxt != null) scoreTxt.visible = !hide;
+		if (iconShadowP1 != null) iconShadowP1.visible = !hide && !minimal;
+		if (iconShadowP2 != null) iconShadowP2.visible = !hide && !minimal;
+		// 流星计分簇：簇接管计分区（scoreTxt 隐藏）；格式串解析失败回退（_clusterFallback）或
+		// 极简血条（scoreTxt 嵌入血条）时回到经典单行
+		var cluster:Bool = HudStyles.clusterActive() && !_clusterFallback;
+		if (scoreTxt != null) scoreTxt.visible = !hide && (!cluster || minimal);
+		if (scoreClusterMain != null) scoreClusterMain.visible = !hide && cluster && !minimal;
+		if (scoreClusterSub != null) scoreClusterSub.visible = !hide && cluster && !minimal;
 		if (timeBarOverlay != null) timeBarOverlay.visible = timeBar != null && timeBar.visible && !hide;
 		if (botplayTxt != null) botplayTxt.visible = (st.cpuControlled || st.replayMode) && !st.endingSong;
-		if (songTxt != null) songTxt.visible = !hide && !ClientPrefs.data.hideWatermark;
+		if (songTxt != null)
+		{
+			songTxt.visible = !hide && !ClientPrefs.data.hideWatermark;
+			// 水印减淡：α 只在目标值变化时写（enforce 每帧跑，避免无谓属性写）
+			var wmAlpha:Float = ClientPrefs.data.watermarkDim ? HudStyles.WATERMARK_DIM_ALPHA : 1;
+			if (songTxt.alpha != wmAlpha) songTxt.alpha = wmAlpha;
+		}
 		if (judgementField != null) judgementField.visible = !hide && ClientPrefs.data.showJudgementCounter;
 
 		// 极简血条：血条移到 Score 栏位置，scoreTxt 垂直居中嵌入血条（无图标、无阴影）

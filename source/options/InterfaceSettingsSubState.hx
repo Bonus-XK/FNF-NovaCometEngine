@@ -52,9 +52,35 @@ class InterfaceSettingsSubState extends BaseOptionsMenu
 		addOption(option);
 		option.onChange = openScoreFormatPrompt;
 
+		var option:Option = new Option('计分栏样式',
+			'游玩界面的计分区外观：\n经典单行 = 上游一行拼接文本（Score/Misses/Rank/Accuracy…）；\n流星三段 = 血条正下两行簇——主行大号分数，次行「Miss n · 准度 · FC」（Miss>0 整行染红）。\n切到流星后可继续用下一项「计分簇内容」选择簇里放什么',
+			'scoreHudStyle',
+			'string',
+			backend.HudStyles.SCORE_STYLE_CHOICES);
+		addOption(option);
+
+		var option:Option = new Option('计分簇内容',
+			'「流星三段」计分簇的内容来源：\n固定字段 = 分数 + Miss/准度/FC；\n跟随格式串 = 按上方「Score栏格式」的分段重排（按 | 分段，含 {score} 的段做主行，其余进次行）；\n格式串解析失败（无 | 分段或无 {score}）时自动回退经典单行',
+			'scoreClusterSource',
+			'string',
+			backend.HudStyles.CLUSTER_SOURCE_CHOICES);
+		addOption(option);
+
+		var option:Option = new Option('时间数字内嵌',
+			'开启后，时间条的文字（剩余/已过时间）移到时间条内部右端显示（14px，黑底与亮色填充上都可读）；\n「歌曲名称」模式不内嵌（歌名长度不定，会溢出条外）',
+			'timeTxtInline',
+			'bool');
+		addOption(option);
+
 		var option:Option = new Option('隐藏水印',
 			'开启后，左下角的水印将不会显示',
 			'hideWatermark',
+			'bool');
+		addOption(option);
+
+		var option:Option = new Option('水印减淡',
+			'开启后，左下角水印（歌名与引擎版本）透明度降到 55%，读谱时更不抢视线',
+			'watermarkDim',
 			'bool');
 		addOption(option);
 		
@@ -96,6 +122,26 @@ class InterfaceSettingsSubState extends BaseOptionsMenu
 		option.maxValue = 1;
 		option.changeValue = 0.1;
 		option.decimals = 1;
+		addOption(option);
+
+		var option:Option = new Option('血条样式',
+			'血量条外观：\n经典贴图 = healthBar.png 贴图（上游原样）；\n0.6.3 旧版 = 填充裁剪为贴图内部形状（兼容旧模组脚本）；\n新版自绘 = 白边框 + 内部填充，不依赖贴图；\n流星圆角 = 黑色圆角底 + 内缩 2px 圆角填充（几何与经典一致，图标位置不变）。\n旧「旧版/新版血量条」开关由本项接管：切换时自动镜像写回，旧模组脚本读取不受影响',
+			'healthBarStyle',
+			'string',
+			backend.HudStyles.HB_STYLE_CHOICES);
+		addOption(option);
+		option.onChange = onHealthBarStyleChange;
+
+		var option:Option = new Option('图标软投影',
+			'开启后，血量条上的角色小图标在血条上缘投出柔和的静态阴影（进入对局时绘制一次，无每帧开销）',
+			'iconDropShadow',
+			'bool');
+		addOption(option);
+
+		var option:Option = new Option('自动游玩徽标',
+			'开启后，自动游玩 / 回放模式的「AutoPlay / REPLAY」文字变为圆角胶囊徽标（静态不呼吸，16px 小字）',
+			'botplayPill',
+			'bool');
 		addOption(option);
 
 		var option:Option = new Option('Combo堆叠',
@@ -229,6 +275,14 @@ class InterfaceSettingsSubState extends BaseOptionsMenu
 				}
 			}
 		));
+	}
+
+	/** 血条样式切换：旧双布尔镜像写回（旧模组脚本读它们不破坏），并立即写存档 */
+	function onHealthBarStyleChange()
+	{
+		ClientPrefs.data.oldHealthBar = (ClientPrefs.data.healthBarStyle == backend.HudStyles.HB_OLD);
+		ClientPrefs.data.newHealthBar = (ClientPrefs.data.healthBarStyle == backend.HudStyles.HB_NEW);
+		ClientPrefs.saveSettings();
 	}
 
 	#if !mobile

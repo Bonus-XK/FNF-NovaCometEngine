@@ -128,6 +128,18 @@ class SaveVariables {
 	@:keep public var minimalHealthBar:Bool = false; // 极简血条：隐藏图标与阴影，血条移到 Score 栏位置，scoreTxt 嵌入血条
 	@:keep public var newHealthBar:Bool = false; // 新版血量条：自绘（不依赖贴图），并融合 0.6.3 兼容模式
 	@:keep public var oldHealthBar:Bool = false; // Psych 0.6.3 旧版血量条（兼容 0.6.3 及以下的旧模组）
+	// ===== PlayState UI 重设计（2026-11-06）：按元素细分的 HUD 样式档位，全部默认 classic/关 = 零行为变化 =====
+	// 常量与档位语义见 backend.HudStyles；血条样式以 healthBarStyle 为权威，
+	// 旧双布尔改为**镜像写入**（样式切换时同步翻转）供旧脚本读取，运行时不再直接消费。
+	@:keep public var scoreHudStyle:String = HudStyles.SCORE_CLASSIC; // 计分栏样式：classic 经典单行 / meteor 流星三段簇
+	@:keep public var scoreClusterSource:String = HudStyles.CLUSTER_FIXED; // 计分簇内容：fixed 固定字段 / format 跟随 scoreTxtFormat 分段（解析失败回退单行）
+	@:keep public var healthBarStyle:String = HudStyles.HB_CLASSIC; // 血条样式：classic 经典贴图 / old 0.6.3 旧版 / new 新版自绘 / rounded 流星圆角
+	@:keep public var timeTxtInline:Bool = false; // 时间数字内嵌：时间文字进时间条内右端 14px
+	@:keep public var iconDropShadow:Bool = false; // 图标软投影：血条上缘静态软投影（create 画一次）
+	@:keep public var botplayPill:Bool = false; // 自动游玩徽标：botplay/REPLAY 圆角胶囊徽标（静态不呼吸）
+	@:keep public var watermarkDim:Bool = false; // 水印减淡：songTxt 透明度降到 0.55
+	/** 一次性迁移标记：healthBarStyle 从旧双布尔并入时只做一次（见 loadPrefs） */
+	@:keep public var hudStyleMigrated:Bool = false;
 	public var noteOffset:Int = 0;
 	// ===== Extra Keys：轨道颜色表扩到 12 轨（lane 0-3 = 旧四色原值；4-11 为新默认色）=====
 	// lane → 颜色在「贴图循环复用」（方向 = lane%4）基础上按 lane 独立可自定义。
@@ -879,6 +891,25 @@ class ClientPrefs {
 				// mobileStreamAudio：后加字段显式回填（Bool，存了才覆盖平台默认）
 				var vmsa:Dynamic = Reflect.field(sd, 'mobileStreamAudio');
 				if (vmsa != null) data.mobileStreamAudio = (vmsa == true);
+				// HUD 样式档位（2026-11-06 PlayState UI 重设计）：字符串枚举字段显式回填
+				var vshs:Dynamic = Reflect.field(sd, 'scoreHudStyle');
+				if (vshs != null && Std.isOfType(vshs, String) && (vshs:String).length > 0)
+					data.scoreHudStyle = (vshs:String);
+				var vscs:Dynamic = Reflect.field(sd, 'scoreClusterSource');
+				if (vscs != null && Std.isOfType(vscs, String) && (vscs:String).length > 0)
+					data.scoreClusterSource = (vscs:String);
+				var vhbs:Dynamic = Reflect.field(sd, 'healthBarStyle');
+				if (vhbs != null && Std.isOfType(vhbs, String) && (vhbs:String).length > 0)
+					data.healthBarStyle = (vhbs:String);
+				// HUD 样式开关族：Bool 回填
+				var vtti:Dynamic = Reflect.field(sd, 'timeTxtInline');
+				if (vtti != null) data.timeTxtInline = (vtti == true);
+				var vids:Dynamic = Reflect.field(sd, 'iconDropShadow');
+				if (vids != null) data.iconDropShadow = (vids == true);
+				var vbp:Dynamic = Reflect.field(sd, 'botplayPill');
+				if (vbp != null) data.botplayPill = (vbp == true);
+				var vwd:Dynamic = Reflect.field(sd, 'watermarkDim');
+				if (vwd != null) data.watermarkDim = (vwd == true);
 			}
 			var __names:Array<String> = sd == null ? [] : Reflect.fields(sd);
 			trace('[ClientPrefs] psychV104Compat loaded = ' + data.psychV104Compat
@@ -1004,6 +1035,16 @@ class ClientPrefs {
 			#if desktop
 			if (!data.cacheOnGPU) data.cacheOnGPU = true;
 			#end
+			if (!__saveSuspect) saveSettings();
+		}
+
+		// 血条样式旧值迁移：单枚举 healthBarStyle 成为权威后，把开过旧双布尔的老玩家迁到对应档。
+		// 旧布尔字段**保留**（运行时改样式时镜像写入），旧脚本读它们不破坏。
+		if (!data.hudStyleMigrated)
+		{
+			data.hudStyleMigrated = true;
+			if (data.oldHealthBar) data.healthBarStyle = HudStyles.HB_OLD;
+			else if (data.newHealthBar) data.healthBarStyle = HudStyles.HB_NEW;
 			if (!__saveSuspect) saveSettings();
 		}
 

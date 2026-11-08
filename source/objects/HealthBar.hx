@@ -3,7 +3,9 @@ package objects;
 import flixel.math.FlxPoint;
 import flixel.math.FlxRect;
 import flixel.util.FlxColor;
+import backend.HudStyles;
 import openfl.display.BitmapData;
+import openfl.display.Shape;
 import openfl.geom.Rectangle;
 
 class HealthBar extends FlxSpriteGroup
@@ -30,17 +32,20 @@ class HealthBar extends FlxSpriteGroup
 
 	var _image:String = 'healthBar';
 	var _useNew:Bool = false;
+	var _useRounded:Bool = false; // 流星圆角档：黑色圆角底 + 内缩 2px 圆角填充（TimeBar newTimeBarStyle 同款机制）
+	var _roundMask:BitmapData = null; // 圆角填充遮罩（buildBg 圆角分支生成，与 bg 同尺寸）
 
 	public function new(x:Float, y:Float, image:String = 'healthBar', valueFunction:Void->Float = null, boundX:Float = 0, boundY:Float = 1,
 			?oldVersion:Bool = false)
 	{
 		super(x, y);
-		
+
 		if(valueFunction != null) this.valueFunction = valueFunction;
 		setBounds(boundX, boundY);
 
 		_image = image;
 		_useNew = ClientPrefs.data.newHealthBar;
+		_useRounded = (ClientPrefs.data.healthBarStyle == HudStyles.HB_ROUNDED);
 		buildBg();
 
 		leftBar = new FlxSprite().makeGraphic(Std.int(bg.width), Std.int(bg.height), FlxColor.WHITE);
@@ -51,7 +56,17 @@ class HealthBar extends FlxSpriteGroup
 		rightBar.color = FlxColor.BLACK;
 		rightBar.antialiasing = ClientPrefs.data.antialiasing;
 
-		checkForHollowShape();
+		if (_useRounded && _roundMask != null)
+		{
+			// 圆角档：填充精灵换成遮罩位图（白色圆角形状），setColors 的颜色乘上去就是彩色圆角填充
+			leftBar.pixels = _roundMask.clone();
+			rightBar.pixels = _roundMask.clone();
+			rightBar.color = FlxColor.BLACK;
+		}
+		else
+		{
+			checkForHollowShape();
+		}
 
 		add(bg);
 		add(leftBar);
@@ -59,13 +74,24 @@ class HealthBar extends FlxSpriteGroup
 		regenerateClips();
 	}
 
-	// 创建/重建血条背景：新版自绘（不依赖贴图，融合 0.6.3），旧版加载贴图
+	// 创建/重建血条背景：新版自绘（不依赖贴图，融合 0.6.3）／流星圆角（纯代码）／旧版加载贴图
 	function buildBg():Void
 	{
 		var barW:Int = 601;
 		var barH:Int = 19;
 
-		if(_useNew)
+		if(_useRounded)
+		{
+			// 流星圆角：黑色圆角底 601×19（同经典几何，图标/hudLayout 数学不变）
+			// + 内缩 2px 的圆角填充遮罩（clipRect 驱动，零每帧重绘）
+			generateRoundedBackground();
+			bg.antialiasing = ClientPrefs.data.antialiasing;
+			barWidth = barW - 4;
+			barHeight = barH - 4;
+			barOffset.set(2, 2);
+			return;
+		}
+		else if(_useNew)
 		{
 			try {
 				var g = Paths.image(_image);
@@ -85,11 +111,47 @@ class HealthBar extends FlxSpriteGroup
 		barHeight = barH - 6;
 	}
 
-	// 运行时切换新旧血条样式（设置改变后立即生效）
-	public function setNewStyle(useNew:Bool):Void
+	// 流星圆角底 + 填充遮罩（TimeBar.generateModernBackground 同款：Shape 一次性绘制，运行时零重绘）
+	function generateRoundedBackground():Void
 	{
-		if (_useNew == useNew || bg == null) return;
+		var w:Int = 601;
+		var h:Int = 19;
+		var border:Int = 2;
+
+		var maskBitmap:BitmapData = new BitmapData(w, h, true, 0x00000000);
+		var maskShape:Shape = new Shape();
+		maskShape.graphics.beginFill(0xFFFFFFFF, 1);
+		maskShape.graphics.drawRoundRect(border, border, w - border * 2, h - border * 2, 6, 6);
+		maskShape.graphics.endFill();
+		maskBitmap.draw(maskShape);
+		_roundMask = maskBitmap;
+
+		var bitmap:BitmapData = new BitmapData(w, h, true, 0x00000000);
+		var shape:Shape = new Shape();
+		shape.graphics.beginFill(0xFF000000, 1);
+		shape.graphics.drawRoundRect(0, 0, w, h, 8, 8);
+		shape.graphics.endFill();
+		bitmap.draw(shape);
+
+		bg = new FlxSprite().makeGraphic(w, h, FlxColor.TRANSPARENT);
+		bg.pixels = bitmap;
+	}
+
+	// 运行时切换血条样式（设置改变后立即生效）。style = backend.HudStyles.HB_* 存档值
+	public function setStyle(style:String):Void
+	{
+		var useNew:Bool = (style == HudStyles.HB_NEW);
+		var useRounded:Bool = (style == HudStyles.HB_ROUNDED);
+		if (_useNew == useNew && _useRounded == useRounded) return;
 		_useNew = useNew;
+		_useRounded = useRounded;
+		rebuildBars();
+	}
+
+	// 按当前 _useNew/_useRounded 重建背景与填充精灵（buildBg + 遮罩位图 + 几何复位）
+	function rebuildBars():Void
+	{
+		if (bg == null) return;
 		remove(bg);
 		buildBg();
 		insert(0, bg);
@@ -97,15 +159,40 @@ class HealthBar extends FlxSpriteGroup
 		leftBar.updateHitbox();
 		rightBar.setGraphicSize(Std.int(bg.width), Std.int(bg.height));
 		rightBar.updateHitbox();
+		if (_useRounded && _roundMask != null)
+		{
+			leftBar.pixels = _roundMask.clone();
+			rightBar.pixels = _roundMask.clone();
+			rightBar.color = FlxColor.BLACK;
+			hollowShape = false;
+		}
+		else
+		{
+			// 回到贴图/自绘档：恢复实心填充位图（圆角遮罩不再生效）
+			leftBar.pixels = new BitmapData(Std.int(bg.width), Std.int(bg.height), true, 0xFFFFFFFF);
+			rightBar.pixels = new BitmapData(Std.int(bg.width), Std.int(bg.height), true, 0xFFFFFFFF);
+			rightBar.color = FlxColor.BLACK;
+			hollowShape = false;
+			checkForHollowShape();
+		}
 		regenerateClips();
+	}
+
+	// 运行时切换新旧血条样式（旧入口，供既有调用点；权威路径走 setStyle）
+	public function setNewStyle(useNew:Bool):Void
+	{
+		if (_useNew == useNew || bg == null) return;
+		_useNew = useNew;
+		rebuildBars();
 	}
 
 	override function update(elapsed:Float) {
 		var value:Null<Float> = FlxMath.remapToRange(FlxMath.bound(valueFunction(), bounds.min, bounds.max), bounds.min, bounds.max, 0, 100);
 		percent = (value != null ? value : 0);
 
-		// 新版血条：外框颜色跟随血量多的一方（玩家满血偏右/左，按 leftToRight 分辨玩家色）
-		if (ClientPrefs.data.newHealthBar && bg != null)
+		// 新版血条：外框颜色跟随血量多的一方（玩家满血偏右/左，按 leftToRight 分辨玩家色）。
+		// 读实例状态 _useNew（而非全局设置）：圆角档黑底不参与跟随，运行时切档也即时生效。
+		if (_useNew && bg != null)
 		{
 			var playerColor:FlxColor = leftToRight ? leftColor : rightColor;
 			var opponentColor:FlxColor = leftToRight ? rightColor : leftColor;
@@ -299,7 +386,8 @@ class HealthBar extends FlxSpriteGroup
 		if(value != borderSize)
 		{
 			borderSize = value;
-			if(!hollowShape)
+			// 圆角档几何由 buildBg 圆角分支固定（内缩 2px），脚本边框不改写它
+			if(!hollowShape && !_useRounded)
 			{
 				barWidth = Std.int(bg.width - 6 - borderSize * 2);
 				barHeight = Std.int(bg.height - 6 - borderSize * 2);

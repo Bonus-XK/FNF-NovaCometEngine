@@ -194,6 +194,15 @@ class PerformanceSubState extends BaseOptionsMenu
 			'bool');
 		addOption(option);
 
+		#if mobile
+		option = new Option(
+			backend.Lang.tOr('option.mobileStreamAudio', '歌曲音频流式'),
+			backend.Lang.tOr('optionDesc.mobileStreamAudio', '进曲时歌曲伴奏/人声按流式播放（约 150KB 常驻），不再整首解码进内存（每条约 20~40MB）：老手机内存不足闪退的主要削减项。\n加载或播放异常时自动回退整首解码，不会无声。默认开启'),
+			'mobileStreamAudio',
+			'bool');
+		addOption(option);
+		#end
+
 		option = new Option('关闭命中回调',
 			'命中音符不再触发 goodNoteHit/opponentNoteHit 的 Lua/Hscript 回调；\n'
 			+ '依赖这些回调的模组（如计分/特效脚本）请保持开启',

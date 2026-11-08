@@ -80,6 +80,8 @@ class GraphicsSettingsSubState extends BaseOptionsMenu
 
 		// 【宽屏适配】窗口比例自适应逻辑分辨率（flixel/system/scaleModes/MeteoricScaleMode）。
 		// 切换后立即重测量；已打开界面的布局在重新进入该界面时按新尺寸生成。
+		// 全平台可用：20:9 宽屏手机正是主要目标（TitleState 在宽度变化时重建一次界面），
+		// 默认关 = 零行为变化。
 		var option:Option = new Option('宽屏适配', //Name
 			'开启后画面铺满窗口并多显示内容：比 16:9 宽的窗口高度锁 720、宽度自适应（上限 20:9）；比 16:9 窄的窗口宽度锁 1280、高度自适应（上限 2×720）；超限时回退等比黑边。对新打开的界面生效', //Description
 			'wideScreen',

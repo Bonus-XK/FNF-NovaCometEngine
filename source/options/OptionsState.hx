@@ -130,9 +130,12 @@ class OptionsState extends MusicBeatState
 		e.make = function() return new PerformanceSubState();
 		list.push(e);
 
+		#if desktop
+		// 录像实现整体在 #if (sys && !android) 下裁剪；手机端不暴露用不了的设置入口。
 		e = new SectionEntry(Lang.tOr('options.category.render', '录像'), Lang.tOr('options.title.render', '录像设置'));
 		e.make = function() return new RenderModeSubState();
 		list.push(e);
+		#end
 
 
 		e = new SectionEntry(Lang.tOr('options.category.programming', '编程'), Lang.tOr('options.title.programming', '编程'));

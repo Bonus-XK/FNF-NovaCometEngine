@@ -1,10 +1,20 @@
 package options;
 
+import backend.HitsoundDomain;
+
 class JudgmentSettingsSubState extends BaseOptionsMenu
 {
 	public function new()
 	{
 		title = '判定';
+
+		var option:Option = new Option('打击音音效',
+			'按下音符时播放的打击音。默认用引擎自带打击音（模组可覆盖）；\n自定义：把 ogg/mp3/wav 放进存档目录的 hitsounds 文件夹，重新打开本页生效',
+			'hitsoundName',
+			'string',
+			HitsoundDomain.listAvailable());
+		addOption(option);
+		option.onChange = onChangeHitsoundName;
 
 		var option:Option = new Option('打击音音量',
 			'按下音符时，会发出“叮！”的打击音',
@@ -111,6 +121,13 @@ class JudgmentSettingsSubState extends BaseOptionsMenu
 
 	function onChangeHitsoundVolume()
 	{
-		FlxG.sound.play(Paths.sound('hitsound'), ClientPrefs.data.hitsoundVolume);
+		FlxG.sound.play(HitsoundDomain.resolveSound(ClientPrefs.data.hitsoundName), ClientPrefs.data.hitsoundVolume);
+	}
+
+	function onChangeHitsoundName()
+	{
+		// 音量为 0 时静默切换（否则听不见的人会以为选择无效）
+		if (ClientPrefs.data.hitsoundVolume > 0)
+			FlxG.sound.play(HitsoundDomain.resolveSound(ClientPrefs.data.hitsoundName), ClientPrefs.data.hitsoundVolume);
 	}
 }

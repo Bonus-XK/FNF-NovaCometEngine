@@ -37,6 +37,10 @@ class HUDCustomizeState extends MusicBeatState
 	var iconP1:HealthIcon;
 	var iconP2:HealthIcon;
 	var scoreTxt:FlxText;
+	var scoreClusterMain:FlxText; // 流星计分簇主行（与实机 GameHUD 同款）
+	var scoreClusterSub:FlxText;
+	var iconShadowP1:FlxSprite; // 图标软投影预览
+	var iconShadowP2:FlxSprite;
 	var songTxt:FlxText; // 左下角水印
 	var judgementTxt:FlxText;
 
@@ -212,8 +216,15 @@ class HUDCustomizeState extends MusicBeatState
 		timeTxt.scrollFactor.set();
 		timeTxt.cameras = [camHUD];
 		add(timeTxt);
+		// 时间数字内嵌预览：「歌曲名称」模式不内嵌（与实机同口径）
+		if (ClientPrefs.data.timeTxtInline && ClientPrefs.data.timeBarType != '歌曲名称')
+		{
+			timeTxt.size = backend.HudStyles.TIME_INLINE_SIZE;
+			timeTxt.color = backend.HudStyles.TIME_INLINE_COLOR;
+			timeTxt.borderSize = 1.25;
+		}
 
-		// 血量条 + 图标
+		// 血量条 + 图标（样式档由 HealthBar 构造内读 healthBarStyle，预览自动跟随）
 		healthBar = new HealthBar(0, 0, 'healthBar', function() return 1.0, 0, 2, ClientPrefs.data.oldHealthBar);
 		healthBar.scrollFactor.set();
 		healthBar.leftToRight = false;
@@ -229,6 +240,23 @@ class HUDCustomizeState extends MusicBeatState
 		iconP2.cameras = [camHUD];
 		add(iconP2);
 
+		// 图标软投影预览（与实机同一共享位图工厂）
+		if (ClientPrefs.data.iconDropShadow)
+		{
+			var shadowBmp = backend.HudStyles.buildIconShadowBitmap();
+			iconShadowP1 = new FlxSprite().makeGraphic(shadowBmp.width, shadowBmp.height, FlxColor.TRANSPARENT);
+			iconShadowP1.pixels = shadowBmp;
+			iconShadowP1.alpha = backend.HudStyles.ICON_SHADOW_ALPHA;
+			iconShadowP1.cameras = [camHUD];
+			add(iconShadowP1);
+
+			iconShadowP2 = new FlxSprite().makeGraphic(shadowBmp.width, shadowBmp.height, FlxColor.TRANSPARENT);
+			iconShadowP2.pixels = shadowBmp;
+			iconShadowP2.alpha = backend.HudStyles.ICON_SHADOW_ALPHA;
+			iconShadowP2.cameras = [camHUD];
+			add(iconShadowP2);
+		}
+
 		// 计分文字
 		scoreTxt = new FlxText(0, 0, FlxG.width, 'Score: 12345 | Misses: 0 | Rating: A', 20);
 		scoreTxt.setFormat(Paths.font('vcr.ttf'), 15, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
@@ -236,12 +264,37 @@ class HUDCustomizeState extends MusicBeatState
 		scoreTxt.cameras = [camHUD];
 		add(scoreTxt);
 
-		// 左下角水印
-		songTxt = new FlxText(0, 0, 0, Lang.tOr('hudCustomize.demoSong', 'Test Song (Hard) | NovaComet Engine'), 12);
+		// 流星计分簇预览（与实机同款字号/配色；fixed/format 两种内容源都走同一构建函数）
+		if (backend.HudStyles.clusterActive())
+		{
+			var mainFont:String = ClientPrefs.data.scoreTxtFont == "Bahnschrift"
+				? Paths.font('bahnschrift.ttf') : Paths.font('vcr.ttf');
+			scoreClusterMain = new FlxText(0, 0, FlxG.width, '', backend.HudStyles.CLUSTER_MAIN_SIZE);
+			scoreClusterMain.setFormat(mainFont, backend.HudStyles.CLUSTER_MAIN_SIZE, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+			scoreClusterMain.borderSize = 1.6;
+			scoreClusterMain.scrollFactor.set();
+			scoreClusterMain.cameras = [camHUD];
+			add(scoreClusterMain);
+
+			scoreClusterSub = new FlxText(0, 0, FlxG.width, '', backend.HudStyles.CLUSTER_SUB_SIZE);
+			scoreClusterSub.setFormat(mainFont, backend.HudStyles.CLUSTER_SUB_SIZE, backend.HudStyles.CLUSTER_SUB_COLOR, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+			scoreClusterSub.borderSize = 1.25;
+			scoreClusterSub.scrollFactor.set();
+			scoreClusterSub.cameras = [camHUD];
+			add(scoreClusterSub);
+
+			refreshClusterPreview();
+		}
+
+		// 左下角水印（两行演示：与实机同一构建函数，引擎行显示真实引擎版本与生效兼容模式）
+		songTxt = new FlxText(0, 0, 0, '', 12);
 		songTxt.setFormat(Paths.font('future.ttf'), 15, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+		songTxt.wordWrap = false;
 		songTxt.scrollFactor.set();
 		songTxt.cameras = [camHUD];
+		if (ClientPrefs.data.watermarkDim) songTxt.alpha = backend.HudStyles.WATERMARK_DIM_ALPHA;
 		add(songTxt);
+		songTxt.text = backend.HudStyles.buildWatermark(Lang.tOr('hudCustomize.demoSongName', 'Test Song'), 'Hard', null);
 
 		// 判定计数侧边栏（模拟）
 		judgementTxt = new FlxText(0, 0, 230, 'Hits: 0\nCombo: 0\nSick: 0\nGood: 0\nBad: 0\nShit: 0\nMisses: 0', 16);
@@ -249,6 +302,42 @@ class HUDCustomizeState extends MusicBeatState
 		judgementTxt.scrollFactor.set();
 		judgementTxt.cameras = [camHUD];
 		add(judgementTxt);
+	}
+
+	/** 计分簇预览内容：fixed/format 与实机同一构建函数；格式串解析失败 → 回退经典单行（与实机同口径） */
+	function refreshClusterPreview():Void
+	{
+		if (scoreClusterMain == null) return;
+		var rawFmt:String = ClientPrefs.data.scoreTxtFormat;
+		var ct:Null<backend.HudStyles.ClusterText> = null;
+		var fallback:Bool = false;
+		if (ClientPrefs.data.scoreClusterSource == backend.HudStyles.CLUSTER_FORMAT)
+		{
+			// 演示变量与实机 buildScoreText 同一套占位替换
+			var substituted:String = rawFmt
+				.replace('{score}', '12345')
+				.replace('{misses}', '0')
+				.replace('{rank}', 'SICK!')
+				.replace('{accuracy}', '98.75')
+				.replace('{nps}', '0')
+				.replace('{maxnps}', '0')
+				.replace('{fc}', 'FC')
+				.replace('{combo}', '0')
+				.replace('{health}', '50%');
+			ct = backend.HudStyles.buildClusterFromFormat(rawFmt, substituted);
+			fallback = (ct == null); // 解析失败：簇隐藏、经典单行显示（实机 updateScore 同语义）
+		}
+		if (!fallback && ct == null)
+			ct = backend.HudStyles.buildClusterFixed('12345', '0', '98.75', 'FC');
+		scoreTxt.visible = fallback;
+		scoreClusterMain.visible = !fallback;
+		scoreClusterSub.visible = !fallback;
+		if (ct != null)
+		{
+			scoreClusterMain.text = ct.main;
+			scoreClusterSub.text = ct.sub;
+			scoreClusterSub.color = ct.danger ? backend.HudStyles.CLUSTER_DANGER_COLOR : backend.HudStyles.CLUSTER_SUB_COLOR;
+		}
 	}
 
 	function hudGetOffset(id:String):Array<Float>
@@ -300,6 +389,9 @@ class HUDCustomizeState extends MusicBeatState
 		timeTxt.x = PlayState.STRUM_X + (FlxG.width / 2) - 248 + timeOff[0];
 		timeTxt.y = timeBar.y + 25;
 		if (ClientPrefs.data.downScroll) timeTxt.y = FlxG.height - 44 + timeOff[1];
+		// 时间数字内嵌预览：与实机同一布局函数（条内右端、垂直居中）
+		if (ClientPrefs.data.timeTxtInline && ClientPrefs.data.timeBarType != '歌曲名称')
+			backend.HudStyles.layoutInlineTimeTxt(timeTxt, timeBar.x, timeBar.bg.width, timeBar.y, timeBar.bg.height);
 
 		var hpOff:Array<Float> = hudGetOffset('healthBar');
 		var hbY:Float = FlxG.height * (!ClientPrefs.data.downScroll ? 0.89 : 0.11) + hpOff[1];
@@ -317,9 +409,29 @@ class HUDCustomizeState extends MusicBeatState
 		scoreTxt.x = scoreOff[0];
 		scoreTxt.y = defaultHpY + 55 + scoreOff[1];
 
+		// 流星计分簇预览位置：与实机 GameHUD 同一公式（上滚：次行占经典 score 行、主行上移一行；
+		// 下滚：主行占经典位、次行向下）
+		if (scoreClusterMain != null && scoreClusterSub != null)
+		{
+			var mainY:Float = scoreTxt.y;
+			var subY:Float = mainY + backend.HudStyles.CLUSTER_MAIN_STEP;
+			if (!ClientPrefs.data.downScroll)
+			{
+				mainY -= backend.HudStyles.CLUSTER_MAIN_STEP;
+				subY -= backend.HudStyles.CLUSTER_MAIN_STEP;
+			}
+			scoreClusterMain.x = scoreOff[0];
+			scoreClusterMain.y = mainY;
+			scoreClusterSub.x = scoreOff[0];
+			scoreClusterSub.y = subY;
+		}
+
 		var wmOff:Array<Float> = hudGetOffset('watermark');
 		songTxt.x = 12 + wmOff[0];
 		songTxt.y = defaultHpY + 55 + wmOff[1];
+		// 两行水印：上滚时整体上移一行（与实机同口径，第二行底边落在经典单行底边）
+		if (!ClientPrefs.data.downScroll)
+			songTxt.y -= songTxt.height / 2;
 
 		// 判定计数侧边栏：默认左侧中间
 		var jcOff:Array<Float> = hudGetOffset('judgementTxt');
@@ -350,6 +462,13 @@ class HUDCustomizeState extends MusicBeatState
 				r = unionRect(r, new FlxRect(iconP2.x, iconP2.y, iconP2.width, iconP2.height));
 				return inflateRect(r, 14);
 			case 'score':
+				// 流星计分簇激活：热区 = 主行 + 次行 + 经典行的整体 union（预览=实机）
+				if (scoreClusterMain != null && scoreClusterMain.visible)
+				{
+					var r:FlxRect = new FlxRect(scoreClusterMain.x, scoreClusterMain.y, scoreClusterMain.textField.textWidth + 40, scoreClusterMain.height);
+					r = unionRect(r, new FlxRect(scoreClusterSub.x, scoreClusterSub.y, scoreClusterSub.textField.textWidth + 40, scoreClusterSub.height));
+					return inflateRect(r, 14);
+				}
 				var w:Float = scoreTxt.textField.textWidth + 40;
 				if (w < 200) w = 700;
 				return new FlxRect(scoreTxt.x + (FlxG.width - w) / 2, scoreTxt.y - 8, w, scoreTxt.height + 16);
@@ -473,6 +592,15 @@ class HUDCustomizeState extends MusicBeatState
 		var iconOffset:Int = 26;
 		iconP1.x = healthBar.barCenter + (150 * iconP1.scale.x - 150) / 2 - iconOffset;
 		iconP2.x = healthBar.barCenter - (150 * iconP2.scale.x) / 2 - iconOffset * 2;
+
+		// 图标软投影预览：跟随图标中心与血条上缘（拖动血量条时同步）
+		if (iconShadowP1 != null)
+		{
+			iconShadowP1.x = iconP1.x + 75 - iconShadowP1.width / 2;
+			iconShadowP1.y = healthBar.y - iconShadowP1.height / 2 + 2;
+			iconShadowP2.x = iconP2.x + 75 - iconShadowP2.width / 2;
+			iconShadowP2.y = healthBar.y - iconShadowP2.height / 2 + 2;
+		}
 
 		var mx:Float = FlxG.mouse.screenX;
 		var my:Float = FlxG.mouse.screenY;

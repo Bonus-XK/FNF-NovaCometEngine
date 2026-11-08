@@ -166,13 +166,31 @@ class CameraHudDomain
 			ps.scoreTxt.x = scoreOff[0];
 			ps.scoreTxt.y = scoreY + scoreOff[1];
 		}
+		// 流星计分簇：与 GameHUD.build 同一公式（上滚：次行占经典 score 行、主行上移一行；
+		// 下滚：主行占经典位、次行向下）
+		if (ps.scoreClusterMain != null && ps.scoreClusterSub != null)
+		{
+			var mainY:Float = scoreY + scoreOff[1];
+			var subY:Float = mainY + HudStyles.CLUSTER_MAIN_STEP;
+			if (!ClientPrefs.data.downScroll)
+			{
+				mainY -= HudStyles.CLUSTER_MAIN_STEP;
+				subY -= HudStyles.CLUSTER_MAIN_STEP;
+			}
+			ps.scoreClusterMain.x = scoreOff[0];
+			ps.scoreClusterMain.y = mainY;
+			ps.scoreClusterSub.x = scoreOff[0];
+			ps.scoreClusterSub.y = subY;
+		}
 
-		// 左下角水印：独立定位
+		// 左下角水印：独立定位（两行水印上滚时整体上移一行，与 GameHUD.build 同口径）
 		var wmOff:Array<Float> = ps.hudGetOffset('watermark');
 		if (ps.songTxt != null)
 		{
 			ps.songTxt.x = 12 + wmOff[0];
 			ps.songTxt.y = scoreY + wmOff[1];
+			if (!ClientPrefs.data.downScroll || ps.isPhigrosStyle)
+				ps.songTxt.y -= ps.songTxt.height / 2;
 		}
 
 		// 判定计数侧边栏：位置由 GameHUD.updateJudgementTxt 每帧管理（openfl TextField）
@@ -295,6 +313,13 @@ class CameraHudDomain
 			ps.scoreTxt.setFormat(fontPath, 15, txtColor, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 			ps.scoreTxt.borderSize = 1.25;
 		}
+
+		// ---- 流星计分簇（scoreHudStyle=meteor）：血条正下主行分数 + 次行 Miss/准度/FC ----
+		// scoreTxt 仍照常维护（脚本兼容 + format 档复用其替换结果）；簇由 enforce() 决定谁可见。
+		// 簇内容与签名缓存都在 GameHUD.updateCluster（簇的私有状态不外泄）。
+		if (ps.hud != null && ps.hud.scoreClusterMain != null)
+			ps.hud.updateCluster(ps, fontPath);
+
 		ps.callOnScripts('onUpdateScore', [miss]);
 	}
 
@@ -468,7 +493,7 @@ class CameraHudDomain
 	{
 		var hide:Bool = ClientPrefs.data.hideHud;
 		if (ps.healthBar != null) ps.healthBar.visible = !hide;
-		if (ps.healthBarOverlay != null) ps.healthBarOverlay.visible = !hide && ClientPrefs.data.healthBarOverlay && !ClientPrefs.data.oldHealthBar;
+		if (ps.healthBarOverlay != null) ps.healthBarOverlay.visible = !hide && ClientPrefs.data.healthBarOverlay && !ClientPrefs.data.oldHealthBar && HudStyles.healthBarTextureVisible();
 		if (ps.iconP1 != null) ps.iconP1.visible = !hide;
 		if (ps.iconP2 != null) ps.iconP2.visible = !hide;
 		if (ps.scoreTxt != null) ps.scoreTxt.visible = !hide;
