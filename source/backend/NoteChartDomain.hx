@@ -133,8 +133,11 @@ class NoteChartDomain
 		else if (ps._overloadFrames > 0)
 			ps._overloadFrames--;
 		ps._bulkDrainedLast = 0;
-		// 结算 strum 高亮每帧每轨一次
-		ps._settleAnimDone = [false, false, false, false];
+		// 结算 strum 高亮每帧每轨一次（原地清零：原写法每帧 new 数组，noteSpawn 每帧调用纯喂 GC）
+		ps._settleAnimDone[0] = false;
+		ps._settleAnimDone[1] = false;
+		ps._settleAnimDone[2] = false;
+		ps._settleAnimDone[3] = false;
 
 		var fixedPosition:Float = Conductor.songPosition - ClientPrefs.data.noteOffset;
 		// 快速跳谱（bulkSkip）：只允许在"真实时间跳变"（单帧前进 > JUMP_DELTA 或显式跳时间）时
