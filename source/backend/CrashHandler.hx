@@ -995,21 +995,28 @@ class CrashHandler
 	 *
 	 * 开销控制：只有 (stage,func,script) 组合变化时才 putEnv，同一回调连续调用不重复写。
 	 */
-	static var _lastLuaCtx:String = '';
+	// 去重键的三个分量分开存：先比分量再拼串，同一回调重复调用时连字符串分配都不发生
+	static var _lastCtxStage:String = '';
+	static var _lastCtxFunc:String = '';
+	static var _lastCtxScript:String = '';
 	public static function setLuaContext(func:String, script:String):Void
 	{
 		#if (cpp && !windows)
 		if (func == null || func.length == 0) return;
-		var ctx:String = lastStage + ' | lua:' + func + '@' + (script == null ? '?' : script);
-		if (ctx == _lastLuaCtx) return;
-		_lastLuaCtx = ctx;
+		var stage:String = lastStage;
+		var scr:String = (script == null ? '?' : script);
+		if (func == _lastCtxFunc && scr == _lastCtxScript && stage == _lastCtxStage) return;
+		_lastCtxFunc = func;
+		_lastCtxScript = scr;
+		_lastCtxStage = stage;
+		var ctx:String = stage + ' | lua:' + func + '@' + scr;
 		try Sys.putEnv('METEORIC_LAST_STAGE', ctx) catch(e:Dynamic) {}
 		#end
 	}
 
 	public static function mark(stage:String):Void
 	{		lastStage = stage;
-		_lastLuaCtx = ''; // 阶段变了：允许下一次 Lua 调用重新写入上下文
+		_lastCtxFunc = ''; // 阶段变了：合法 func 永不为空串，置空强制下一次 Lua 调用重新写入上下文
 		logEvent('stage:' + stage);
 		#if (cpp && !windows)
 		try
