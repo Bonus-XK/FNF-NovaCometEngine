@@ -268,6 +268,26 @@ class TitleState extends MusicBeatState
 			// METEORIC_TEST_SONG 追加段 "bot"：强制开启 botplay（复现自动游玩问题用）
 			if (parts.length > 4 && parts[4] == 'bot')
 				ClientPrefs.data.gameplaySettings.set('botplay', true);
+			// METEORIC_TEST_HUD=meteor：冒烟验证 HUD 新样式（仅本测试路径生效，正式玩家零影响）。
+			// 一次性打开 2026-11-06 HUD 重设计的全部新档位，配合截图/日志做真机对照。
+			// 追加段 `,pe063` / `,pe073` / `,pe104`：同时点亮对应全局兼容开关（水印兼容段冒烟用）。
+			var testHud:String = Sys.getEnv('METEORIC_TEST_HUD');
+			if (testHud != null && testHud.indexOf('meteor') >= 0)
+			{
+				ClientPrefs.data.scoreHudStyle = backend.HudStyles.SCORE_METEOR;
+				ClientPrefs.data.scoreClusterSource = backend.HudStyles.CLUSTER_FIXED;
+				ClientPrefs.data.healthBarStyle = backend.HudStyles.HB_ROUNDED;
+				ClientPrefs.data.timeTxtInline = true;
+				ClientPrefs.data.iconDropShadow = true;
+				ClientPrefs.data.botplayPill = true;
+				ClientPrefs.data.watermarkDim = true;
+			}
+			if (testHud != null)
+			{
+				if (testHud.indexOf(',pe063') >= 0) ClientPrefs.data.luaUse063Compat = true;
+				if (testHud.indexOf(',pe073') >= 0) ClientPrefs.data.psychV073Compat = true;
+				if (testHud.indexOf(',pe104') >= 0) ClientPrefs.data.psychV104Compat = true;
+			}
 			Difficulty.resetList();
 			PlayState.isStoryMode = false;
 			PlayState.storyDifficulty = tDiff;
