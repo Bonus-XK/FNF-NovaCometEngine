@@ -87,4 +87,6 @@ tools/lime.ndll.wallclock-arm64
 tools/lime.ndll.win64.wallclock
 tools/wallclock-stash/
 tools/load_report.sh
+# 死代码归档目录里的本地残渣（不入库）
+archives/residue/
 docs/CNE-GAP-AUDIT-20261005.md
