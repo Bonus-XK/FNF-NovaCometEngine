@@ -43,7 +43,7 @@ class GlobalShaderHandler
 
 	/**
 	 * 启用全局 shader（跨界面常驻，模组自行 disable()）。
-	 * @param params 可选参数表 {curvature, scan, vignette, rgbsplit}，Lua table / HScript 对象均可，
+	 * @param params 可选参数表 {curvature, scan, vignette, rgbsplit, quality}，Lua table / HScript 对象均可，
 	 *               缺省项用 shader 自带默认值。未知的键静默忽略。
 	 * @return false = 被门禁拒绝 / 名字未注册 / 游戏根对象未就绪
 	 */
@@ -75,6 +75,7 @@ class GlobalShaderHandler
 			tryApplyParam(newShader, params, 'vignette');
 			tryApplyParam(newShader, params, 'rgbsplit');
 			tryApplyParam(newShader, params, 'rgbSplit');
+			tryApplyParam(newShader, params, 'quality'); // 1 = 原版 Lottes，0/缺省 = CRT Lite
 		}
 
 		shader = newShader;

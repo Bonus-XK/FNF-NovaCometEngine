@@ -47,6 +47,7 @@ class CRTShader extends FlxShader
 		uniform float uVignette;     // -> soft edge falloff   (0.30 = subtle)
 		uniform float uRGBSplit;     // -> shadow mask R/B phase (uv units)
 		uniform float uTime;         // -> static shader API placeholder
+		uniform float uQuality;      // 0 = CRT Lite (default), 1 = classic Lottes full path
 
 		#define SOURCE_HEIGHT 360.0
 		#define HARD_PIX -3.0
@@ -235,6 +236,10 @@ class CRTShader extends FlxShader
 			gWarpY = 0.041 * clamp(uCurvature / 0.10, 0.0, 4.0);
 			gRGBShift = uRGBSplit * 1000.0;
 
+			// classic Lottes path (uQuality = 1): 43 texture fetches per pixel.
+			// Kept verbatim as the visual reference / rollback path.
+			if (uQuality > 0.5)
+			{
 			vec2 pos = Warp(openfl_TextureCoordv);
 			vec3 outColor = Tri(pos);
 			outColor.rgb += Bloom(pos) * BLOOM_AMOUNT;
@@ -260,6 +265,39 @@ class CRTShader extends FlxShader
 
 			gl_FragColor = vec4(clamp(ToSrgb(outColor.rgb), 0.0, 1.0),
 				texture2D(bitmap, openfl_TextureCoordv).a);
+			return;
+			}
+
+			// ===================================================================
+			// CRT Lite (default): same display cues (barrel warp, scanlines,
+			// shadow mask, vignette, RGB split) with 4 texture fetches instead of 43.
+			// No extra texture, no extra pass, no resolution change.
+			// ===================================================================
+			vec2 uv = openfl_TextureCoordv;
+			vec2 litePos = Warp(uv);
+			float shift = uRGBSplit * 2.0;
+			vec3 liteColor = texture2D(bitmap, litePos).rgb;
+			liteColor.r = texture2D(bitmap, litePos + vec2(shift, 0.0)).r;
+			liteColor.b = texture2D(bitmap, litePos - vec2(shift, 0.0)).b;
+
+			// analytic scanline weight on the 360-row simulated grid
+			float scanWave = 0.5 + 0.5 * cos(litePos.y * SOURCE_HEIGHT * 6.2831853);
+			liteColor *= 1.0 - clamp(uScanStrength, 0.0, 0.5) * 2.2 * (1.0 - scanWave);
+
+			vec2 liteFrag = uv * openfl_TextureSize * 1.000001;
+			liteColor *= Mask(liteFrag);
+
+			vec2 liteD = abs(uv - 0.5) * 2.0;
+			liteColor *= 1.0 - uVignette * dot(liteD, liteD) * 0.35;
+
+			// gamma / brightness compensation for skipping linear-space filtering
+			liteColor = pow(max(liteColor, vec3(0.0)), vec3(0.9)) * 1.18;
+
+			if (!(litePos.x > 0.0001 && litePos.x < 0.9999 && litePos.y > 0.0001 && litePos.y < 0.9999))
+				liteColor = vec3(0.0);
+			liteColor += uTime * 0.0;
+
+			gl_FragColor = vec4(clamp(liteColor, 0.0, 1.0), texture2D(bitmap, uv).a);
 		}')
 	public function new()
 	{
@@ -269,6 +307,12 @@ class CRTShader extends FlxShader
 		this.uVignette.value = [0.30];
 		this.uRGBSplit.value = [0.0008];
 		this.uTime.value = [0.0];
+		// 默认 Lite（帧数优化）；METEORIC_CRT_CLASSIC=1 或脚本 quality=1 回到原版 Lottes 效果
+		var classic:Bool = false;
+		#if sys
+		try { classic = (Sys.getEnv('METEORIC_CRT_CLASSIC') == '1'); } catch (_:Dynamic) {}
+		#end
+		this.uQuality.value = [classic ? 1.0 : 0.0];
 	}
 
 	override function __createGLProgram(vertexSource:String, fragmentSource:String):GLProgram
@@ -304,6 +348,8 @@ class CRTShader extends FlxShader
 				this.uRGBSplit.value = [value];
 			case 'time' | 'uTime':
 				this.uTime.value = [value];
+			case 'quality' | 'uQuality':
+				this.uQuality.value = [value >= 0.5 ? 1.0 : 0.0];
 			default:
 				return false;
 		}
@@ -324,6 +370,8 @@ class CRTShader extends FlxShader
 				return this.uRGBSplit.value[0];
 			case 'time' | 'uTime':
 				return this.uTime.value[0];
+			case 'quality' | 'uQuality':
+				return this.uQuality.value[0];
 			default:
 				return null;
 		}
