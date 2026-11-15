@@ -507,16 +507,12 @@ class LoadingState extends MusicBeatState
 		#if !mobile
 		try
 		{
-			var evFile:String = Paths.json(PlayState.SONG.song + '/events');
-			#if MODS_ALLOWED
-			var evMods:String = Paths.modsJson(PlayState.SONG.song + '/events');
-			var evPath:String = FileSystem.exists(evMods) ? evMods : (FileSystem.exists(evFile) ? evFile : null);
-			#else
-			var evPath:String = FileSystem.exists(evFile) ? evFile : null;
-			#end
+			// 压缩事件文件（.mec）与 .json 共用同一路径口径与文本读取入口，
+			// 避免直读 File.getContent 把二进制容器当成 JSON 解析。
+			var evPath:String = Paths.chartPath(PlayState.SONG.song + '/events');
 			if (evPath != null)
 			{
-				var evData:Dynamic = haxe.Json.parse(File.getContent(evPath));
+				var evData:Dynamic = haxe.Json.parse(Song.readChartText(evPath));
 				var evGroups:Array<Dynamic> = evData != null ? Reflect.field(evData, 'events') : null;
 				if (evGroups != null)
 				{

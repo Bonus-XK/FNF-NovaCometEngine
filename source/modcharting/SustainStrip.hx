@@ -30,13 +30,49 @@ class SustainStrip extends FlxStrip
         this.daNote = daNote;
         daNote.alpha = 1;
         super(0, 0);
-        loadGraphic(daNote.updateFramePixels());
-        shader = daNote.shader;
-        for (uv in noteUV)
+
+        // ⚠ tile 渲染下 FlxSprite.useFramePixels == false，且渲染器接管绘制后长条音符
+        // 从未经 Note.draw() 生成 framePixels：updateFramePixels() 返回 null，
+        // loadGraphic(null) 静默失败 → graphic == null → FlxStrip.draw() 首行直接 return
+        // （四边形算得再准也全隐身）。改用音符所在图集 + 当前帧 UV：
+        // 零额外纹理、与同图集三角形合批、RGB 染色 shader 仍作用于同一张图集。
+        var frame = daNote.frame;
+        if (daNote.graphic != null && frame != null && frame.uv != null)
         {
-            uvtData.push(uv);
-            vertices.push(0);
+            graphic = daNote.graphic;
+            var uv = frame.uv;
+            // flixel 的 frame.uv 存 (x0, y0, x1, y1)：width/height 实为右/下边界
+            var u0 = uv.x;
+            var u1 = uv.width;
+            var v0 = uv.y;
+            var v1 = uv.height;
+            var vm = (v0 + v1) * 0.5;
+            var mappedUV:Array<Float> = [u0, v0, u1, v0, u0, vm, u1, vm, u0, v1, u1, v1];
+            for (value in mappedUV)
+            {
+                uvtData.push(value);
+                vertices.push(0);
+            }
+            antialiasing = daNote.antialiasing;
         }
+        else
+        {
+            // 兜底：帧/图集不可用时按当前帧画一张独立位图，保证网格有纹理可采样
+            if (frame != null)
+                loadGraphic(frame.paint(), false, 0, 0, true);
+            else
+            {
+                var pixels = daNote.updateFramePixels();
+                if (pixels != null)
+                    loadGraphic(pixels, false, 0, 0, true);
+            }
+            for (uv in noteUV)
+            {
+                uvtData.push(uv);
+                vertices.push(0);
+            }
+        }
+        shader = daNote.shader;
         for (ind in noteIndices)
             indices.push(ind);
     }

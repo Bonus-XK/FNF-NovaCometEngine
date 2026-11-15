@@ -488,7 +488,7 @@ class HostDomain
 			}
 			catch (e:Dynamic) { trace('[角色自愈] dad 重建失败：' + e); }
 		}
-		if (ps.gf == null)
+		if (ps.gf == null && !ps.gfHidden) // 舞台声明不构造 gf（hide_girlfriend/极简档）时不要自愈复活
 		{
 			var cName:String = (PlayState.SONG.gfVersion != null && PlayState.SONG.gfVersion.length > 0) ? PlayState.SONG.gfVersion : 'gf';
 			try
@@ -1285,6 +1285,44 @@ class HostDomain
 		#end
 	}
 
+	#if JS_ALLOWED
+	/** JS scripts (QuickJS): lifecycle callbacks, same pipeline as Lua/HScript. */
+	public static function callOnJSScripts(ps:PlayState, funcToCall:String, args:Array<Dynamic> = null, ignoreStops = false, exclusions:Array<String> = null, excludeValues:Array<Dynamic> = null):Dynamic
+	{
+		var returnVal:Dynamic = FunkinLua.Function_Continue;
+		if(args == null) args = [];
+		if(exclusions == null) exclusions = PlayState._noExclusions;
+		if(excludeValues == null) excludeValues = PlayState._noExcludeValues;
+
+		for (script in ps.jsArray)
+		{
+			if(script == null || exclusions.contains(script.scriptName)) continue;
+			var myValue:Dynamic = null;
+			try
+			{
+				myValue = script.call(funcToCall, args);
+			}
+			catch (e:Dynamic)
+			{
+				myValue = null;
+			}
+			if(myValue != null && !excludeValues.contains(myValue))
+				returnVal = myValue;
+		}
+		return returnVal;
+	}
+
+	public static function setOnJSScripts(ps:PlayState, variable:String, arg:Dynamic, exclusions:Array<String> = null)
+	{
+		if(exclusions == null) exclusions = PlayState._noExclusions;
+		for (script in ps.jsArray)
+		{
+			if(script == null || exclusions.contains(script.scriptName)) continue;
+			script.set(variable, arg);
+		}
+	}
+	#end
+
 	/** 原 PlayState.isTurboAggregateIndex（作用域分析：零遮蔽，11 处成员引用已限定）。 */
 	public static function isTurboAggregateIndex(ps:PlayState, index:Int):Bool
 	{
@@ -1345,6 +1383,10 @@ class HostDomain
 
 		var result:Dynamic = ps.callOnLuas(funcToCall, args, ignoreStops, exclusions, excludeValues);
 		if(result == null || excludeValues.contains(result)) result = ps.callOnHScript(funcToCall, args, ignoreStops, exclusions, excludeValues);
+		#if JS_ALLOWED
+		var jsResult:Dynamic = callOnJSScripts(ps, funcToCall, args, ignoreStops, exclusions, excludeValues);
+		if(jsResult != null && !excludeValues.contains(jsResult)) result = jsResult;
+		#end
 		return result;
 	}
 
@@ -1443,6 +1485,9 @@ class HostDomain
 		if(exclusions == null) exclusions = PlayState._noExclusions;
 		ps.setOnLuas(variable, arg, exclusions);
 		ps.setOnHScript(variable, arg, exclusions);
+		#if JS_ALLOWED
+		setOnJSScripts(ps, variable, arg, exclusions);
+		#end
 	}
 
 	/** 原 PlayState.onAndroidBack（作用域分析：零遮蔽，1 处成员引用已限定）。 */
@@ -2003,6 +2048,42 @@ class HostDomain
 									if (ps._oppHitSeqs == null) ps._oppHitSeqs = new Map<Int, Bool>();
 									ps._oppHitSeqs.set(daNote.chartSeq, true);
 								}
+							}
+							// 【长条持续动作修复】对手长条分块到点也要续住 sing 动作：头部命中后只有一次
+							// playAnim+holdTimer=0，分块不喂命中时 holdTimer 走满阈值（stepCrochet·singDuration，
+							// ~0.5s）Character.update 就 dance() 回 idle——长条仍在按住而动作已中断。
+							// 只重置 holdTimer，不走 opponentNoteHit（避免每分块重复回调/音效/强制重启动画，
+							// 也避免改变分块精灵的回收时机：尾巴继续由下方晚回收路径收尾）。
+							// ⚠ 不做 prevNote 链校验：池化架构下 prevNote 按全局生成序重建（seqNote[chartSeq-1]），
+							// 指向的对象与命中状态不可靠（实测 prevHit=false 漏重置）；而 holdTimer 归零在
+							// 无 sing 动画时是零操作（本就为 0），多触发无副作用，漏触发才出 bug。
+							// ⚠ 不置 hitByOpponent：分块保持与修复前完全一致的生命周期/回收/渲染，
+							// 本分支唯一的副作用就是 holdTimer 归零（纯读侧续命，零渲染状态改动）。
+							// 分块在 killWindow（botplay 6ms / 实玩 noteKillOffset）后由下方回收路径照常收走，
+							// 下帧 !hitByOpponent 仍成立→重复归零也幂等无害。
+							else if (!ps.rewinding && !daNote.hitByOpponent && !daNote.ignoreNote && daNote.isSustainNote
+								&& songPos - daNote.strumTime >= 0)
+							{
+								var holdChar:Character = daNote.gfNote ? ps.gf : ps.dad;
+								if (holdChar != null) holdChar.holdTimer = 0;
+
+								// 【对手长条持续高亮】分块不走 opponentNoteHit（避免重复回调/改变回收时机），
+								// 但判定线 confirm 与 holdCover 覆盖层必须按分块续住，否则只亮头部一瞬。
+								var oppLane:Int = Std.int(Math.abs(daNote.noteData));
+								if (ClientPrefs.data.opponentLightStrum && strum != null)
+								{
+									var holdReset:Float = Conductor.stepCrochet * 1.25 / 1000 / ps.playbackRate;
+									if (daNote.parent != null)
+									{
+										var remain:Float = (daNote.parent.strumTime + daNote.parent.sustainLength - songPos) / 1000 / ps.playbackRate;
+										if (remain > 0) holdReset += remain;
+									}
+									if (strum.animation.curAnim == null || strum.animation.curAnim.name != 'confirm')
+										strum.playAnim('confirm', true);
+									strum.resetAnim = Math.max(strum.resetAnim, holdReset);
+								}
+								if (ps.holdCoverHandler != null)
+									ps.holdCoverHandler.onHit(ExtraKeys.songKeys + oppLane);
 							}
 
 							if(daNote.isSustainNote && strum != null && strum.sustainReduce

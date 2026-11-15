@@ -2,6 +2,8 @@ package backend;
 
 import openfl.events.Event;
 import flixel.FlxG;
+import flixel.tweens.FlxTween;
+import flixel.tweens.FlxEase;
 import backend.BaseStage;
 import backend.MusicBeatState;
 import objects.Note.EventNote;
@@ -276,16 +278,123 @@ class EventDomain
 				}
 
 			case 'Camera Follow Pos':
+				// 两种值格式兼容：
+				//  ① 旧格式（本引擎既有）：值1 = X，值2 = Y —— 瞬时钉位（原行为不变）；
+				//  ② DCE 格式（演出编排编辑器写出）：值1 = X，值2 = "Y,时长,缓动"（默认 0.5,quadInOut；
+				//     INSTANT = 瞬时）。两个值都留空 = 解除钉死恢复小节跟随。
 				if(ps.camFollow != null)
 				{
 					ps.isCameraOnForcedPos = false;
-					if(flValue1 != null || flValue2 != null)
+					var cfpParts:Array<String> = (value2 == null) ? [] : value2.split(',');
+					var cfpHasSpec:Bool = cfpParts.length > 1; // "Y,时长,缓动"
+					var cfpY:Null<Float> = cfpHasSpec ? Std.parseFloat(StringTools.trim(cfpParts[0])) : flValue2;
+					var cfpDur:Float = cfpHasSpec ? Std.parseFloat(StringTools.trim(cfpParts[1])) : 0.5;
+					var cfpEaseName:String = cfpParts.length > 2 ? StringTools.trim(cfpParts[2]) : 'quadInOut';
+					if (!Math.isFinite(cfpY) && flValue2 != null && Math.isFinite(flValue2)) cfpY = flValue2;
+					var cfpHasY:Bool = cfpY != null && Math.isFinite(cfpY);
+					var cfpHasX:Bool = flValue1 != null && Math.isFinite(flValue1);
+					if(cfpHasX || cfpHasY)
 					{
 						ps.isCameraOnForcedPos = true;
-						if(flValue1 == null) flValue1 = 0;
-						if(flValue2 == null) flValue2 = 0;
-						ps.camFollow.x = flValue1;
-						ps.camFollow.y = flValue2;
+						var cfpX:Float = cfpHasX ? flValue1 : 0;
+						if (!cfpHasY) cfpY = 0;
+						cfpX = Math.max(-100000, Math.min(100000, cfpX));
+						var cfpYf:Float = Math.max(-100000, Math.min(100000, cfpY));
+						if (!Math.isFinite(cfpDur) || cfpDur < 0) cfpDur = 0.5;
+						cfpDur = Math.min(600, cfpDur);
+						if (!cfpHasSpec || cfpDur <= 0.001 || ChoreoEase.isSnapToken(cfpEaseName))
+							ps.tweenCameraScroll('game', cfpX, cfpYf, 0, 'linear'); // 旧行为 = 瞬时直设
+						else
+							ps.tweenCameraScroll('game', cfpX, cfpYf, cfpDur, cfpEaseName);
+					}
+				}
+
+			case 'Focus Camera':
+				// DCE 兼容：对焦目标 + 偏移 + 时长/缓动。与 Move Camera 相反——
+				// Focus Camera 会**钉住**相机（isCameraOnForcedPos = true，门控小节跟随），
+				// 由 Camera Follow Pos 留空 / Move Camera / Set Camera Zoom 解除。
+				// 值1 = 对焦目标：boyfriend / dad / girlfriend / pos（pos 模式下值2 偏移即绝对坐标）；
+				// 值2 = "偏移X,偏移Y,时长,缓动"（后两项可省略，默认 2,CLASSIC；CLASSIC/INSTANT = 瞬时）。
+				if(ps.camFollow != null)
+				{
+					var fcTargetX:Float = ps.camFollow.x;
+					var fcTargetY:Float = ps.camFollow.y;
+					switch (value1.toLowerCase().trim())
+					{
+						case 'boyfriend' | 'bf':
+							fcTargetX = ps.boyfriend.getMidpoint().x - 100 - ps.boyfriend.cameraPosition[0] + ps.boyfriendCameraOffset[0];
+							fcTargetY = ps.boyfriend.getMidpoint().y - 100 + ps.boyfriend.cameraPosition[1] + ps.boyfriendCameraOffset[1];
+						case 'dad' | 'opponent':
+							fcTargetX = ps.dad.getMidpoint().x + 150 + ps.dad.cameraPosition[0] + ps.opponentCameraOffset[0];
+							fcTargetY = ps.dad.getMidpoint().y - 100 + ps.dad.cameraPosition[1] + ps.opponentCameraOffset[1];
+						case 'gf' | 'girlfriend':
+							if (ps.gf != null)
+							{
+								fcTargetX = ps.gf.getMidpoint().x + ps.gf.cameraPosition[0] + ps.girlfriendCameraOffset[0];
+								fcTargetY = ps.gf.getMidpoint().y + ps.gf.cameraPosition[1] + ps.girlfriendCameraOffset[1];
+							}
+						case 'pos':
+							fcTargetX = 0;
+							fcTargetY = 0;
+						default:
+					}
+					var fcParts:Array<String> = (value2 == null) ? [] : value2.split(',');
+					var fcOx:Float = fcParts.length > 0 ? Std.parseFloat(StringTools.trim(fcParts[0])) : 0;
+					var fcOy:Float = fcParts.length > 1 ? Std.parseFloat(StringTools.trim(fcParts[1])) : 0;
+					if (!Math.isFinite(fcOx)) fcOx = 0;
+					if (!Math.isFinite(fcOy)) fcOy = 0;
+					fcOx = Math.max(-100000, Math.min(100000, fcOx));
+					fcOy = Math.max(-100000, Math.min(100000, fcOy));
+					fcTargetX += fcOx;
+					fcTargetY += fcOy;
+					var fcDur:Float = fcParts.length > 2 ? Std.parseFloat(StringTools.trim(fcParts[2])) : 2;
+					var fcEaseName:String = fcParts.length > 3 ? StringTools.trim(fcParts[3]) : 'CLASSIC';
+					if (!Math.isFinite(fcDur) || fcDur < 0) fcDur = 2;
+					fcDur = Math.min(600, fcDur);
+					ps.isCameraOnForcedPos = true;
+					if (fcDur <= 0.001 || ChoreoEase.isSnapToken(fcEaseName))
+						ps.tweenCameraScroll('game', fcTargetX, fcTargetY, 0, 'linear');
+					else
+						ps.tweenCameraScroll('game', fcTargetX, fcTargetY, fcDur, fcEaseName);
+				}
+
+			case 'Zoom Camera':
+				// DCE 兼容：直接设定镜头缩放（同 Set Camera Zoom 但值格式不同）。
+				// 值1 = 目标缩放；值2 = "时长,缓动,模式"（模式 direct = 绝对缩放 / stage = 乘舞台 defaultZoom）。
+				if(ps.camGame != null)
+				{
+					var zcTarget:Float = (flValue1 != null && Math.isFinite(flValue1)) ? flValue1 : ps.defaultCamZoom;
+					var zcParts:Array<String> = (value2 == null) ? [] : value2.split(',');
+					var zcDur:Float = zcParts.length > 0 ? Std.parseFloat(StringTools.trim(zcParts[0])) : 0;
+					var zcEaseName:String = zcParts.length > 1 ? StringTools.trim(zcParts[1]) : 'linear';
+					if (zcParts.length > 2 && StringTools.trim(zcParts[2]).toLowerCase() == 'stage')
+						zcTarget *= ps.defaultCamZoom;
+					if (!Math.isFinite(zcTarget)) zcTarget = 1;
+					zcTarget = Math.max(0.01, Math.min(10, zcTarget));
+					if (!Math.isFinite(zcDur) || zcDur < 0) zcDur = 0;
+					zcDur = Math.min(600, zcDur);
+					ps.tweenCameraZoom('game', zcTarget, zcDur, zcEaseName);
+				}
+
+			case 'Camera Angle':
+				// DCE 兼容：镜头角度（度）。值1 = 角度（0 = 回正）；值2 = "时长,缓动"（默认 0.3,quadOut）。
+				if(ps.camGame != null)
+				{
+					var caTarget:Float = (flValue1 != null && Math.isFinite(flValue1)) ? flValue1 : 0;
+					var caParts:Array<String> = (value2 == null) ? [] : value2.split(',');
+					var caDur:Float = caParts.length > 0 ? Std.parseFloat(StringTools.trim(caParts[0])) : 0;
+					var caEaseName:String = caParts.length > 1 ? StringTools.trim(caParts[1]) : 'linear';
+					if (!Math.isFinite(caTarget)) caTarget = 0;
+					caTarget = Math.max(-3600, Math.min(3600, caTarget));
+					if (!Math.isFinite(caDur) || caDur < 0) caDur = 0;
+					caDur = Math.min(600, caDur);
+					FlxTween.cancelTweensOf(ps.camGame, ['angle']);
+					if (caDur <= 0.001 || ChoreoEase.isSnapToken(caEaseName))
+						ps.camGame.angle = caTarget;
+					else
+					{
+						var caEase:Null<Float->Float> = ChoreoEase.resolve(caEaseName);
+						FlxTween.tween(ps.camGame, {angle: caTarget}, caDur, {ease: caEase != null ? caEase : FlxEase.linear});
 					}
 				}
 

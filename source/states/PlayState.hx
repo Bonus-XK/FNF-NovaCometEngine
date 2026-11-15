@@ -156,6 +156,10 @@ class PlayState extends MusicBeatState
 	public var gfMap:Map<String, Character> = new Map<String, Character>();
 	public var variables:Map<String, Dynamic> = new Map<String, Dynamic>();
 	
+	#if JS_ALLOWED
+	public var jsArray:Array<scripting.js.JSScript> = [];
+	#end
+
 	#if HSCRIPT_ALLOWED
 	public var hscriptArray:Array<HScript> = [];
 	// Psych 0.7 兼容：舞台脚本用 game.backdropSprites 记录 FlxBackdrop（FunkinMix Dogma 等）
@@ -497,6 +501,7 @@ class PlayState extends MusicBeatState
 	// 上一帧音频位置（毫秒）：用于实测自动游玩每帧前进量，精确计算命中提前量
 	var lastBotSongPos:Float = 0;
 	var botBatchAnimDone:Array<Bool> = [false, false, false, false];
+	var botBatchStrumDone:Array<Bool> = [false, false, false, false]; // strum 高亮节流与人物动画节流分离
 	var botBatchSplashDone:Array<Bool> = [false, false, false, false];
 	var botBatchHitsoundDone:Bool = false;
 	var botBatchScoreShown:Bool = false;
@@ -628,6 +633,10 @@ class PlayState extends MusicBeatState
 	private var keysArray:Array<String>;
 
 	public var precacheList:Map<String, String> = new Map<String, String>();
+
+	/** 舞台要求不构造 gf（stage.json hide_girlfriend / 极简档跳过）：角色自愈 ensureCharactersAlive
+	 *  据此判断，不再把 gf 复活——否则每帧自愈会把被跳过的 gf 重建出来（2026-11-14 TCM 无 gf 舞台实测）。 */
+	public var gfHidden:Bool = false;
 	public var songName:String;
 
 	// Callbacks for stages
@@ -681,6 +690,7 @@ class PlayState extends MusicBeatState
 		// per-lane 运行时状态按键数定长（字段初始化器是 4K 默认值）
 		lastSplashLane = ExtraKeys.farPastLanes();
 		botBatchAnimDone = ExtraKeys.falseLanes();
+		botBatchStrumDone = ExtraKeys.falseLanes();
 		botBatchSplashDone = ExtraKeys.falseLanes();
 		_settleAnimDone = ExtraKeys.falseLanes();
 
@@ -832,6 +842,7 @@ class PlayState extends MusicBeatState
 		switch (curStage)
 		{
 			case 'stage': new states.stages.StageWeek1(); //Week 1
+			case 'tcm': new states.stages.StageTcm(); //TCM Demo1 Chapter1 三阶段舞台
 			case 'spooky': new states.stages.Spooky(); //Week 2
 			case 'philly': new states.stages.Philly(); //Week 3
 			case 'limo': new states.stages.Limo(); //Week 4
@@ -880,6 +891,21 @@ class PlayState extends MusicBeatState
 		}
 		#end
 
+		// JS scripts (QuickJS). Off by default: no runtime is created and no .js is scanned.
+		#if JS_ALLOWED
+		if (!replayMode && ClientPrefs.data.jsScriptingEnabled)
+		{
+			var jsFolders:Array<String> = Mods.directoriesWithFile(Paths.getPreloadPath(), 'scripts/', Mods.hasLegacyEnabled());
+			for (folder in jsFolders)
+				for (file in FileSystem.readDirectory(folder))
+					if (file.toLowerCase().endsWith('.js'))
+					{
+						var js = new scripting.js.JSScript(folder + file);
+						jsArray.push(js);
+					}
+		}
+		#end
+
 		trace('[PLAY create] globalScripts ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
 
 		// TuoboLoad=2（极简）：跳过 gf 构造。
@@ -891,7 +917,8 @@ class PlayState extends MusicBeatState
 		// 都已有 `gf != null` 判断，跳过是安全的。
 		// dad / boyfriend 不跳：HUD 依赖它们的 healthIcon / healthColorArray
 		//（3331/3343/3438/3772），且两者合计仅 ~290ms，不是主要矛盾。
-		if (!stageData.hide_girlfriend && ClientPrefs.tuoboLoadLevel() < 2)
+		gfHidden = stageData.hide_girlfriend || ClientPrefs.tuoboLoadLevel() >= 2;
+		if (!gfHidden)
 		{
 			if(SONG.gfVersion == null || SONG.gfVersion.length < 1) SONG.gfVersion = 'gf'; //Fix for the Chart Editor
 		gf = new Character(0, 0, SONG.gfVersion);
@@ -3517,6 +3544,13 @@ class PlayState extends MusicBeatState
 			hscriptArray.pop();
 		#end
 
+		#if JS_ALLOWED
+		for (js in jsArray)
+			if (js != null) js.destroy();
+		while (jsArray.length > 0)
+			jsArray.pop();
+		#end
+
 		FlxG.stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);
 		FlxG.stage.removeEventListener(KeyboardEvent.KEY_UP, onKeyRelease);
 		#if mobile
@@ -3971,20 +4005,25 @@ class GameHUD
 		}
 		st.add(botplayTxt);
 
-		// ---- 判定计数侧边栏（openfl TextField 直接渲染，支持部分着色；默认左侧中间） ----
-		var jcOff:Array<Float> = st.hudGetOffset('judgementTxt');
-		judgementField = new openfl.text.TextField();
+	// ---- 判定计数侧边栏（openfl TextField 直接渲染，支持部分着色；默认左侧中间） ----
+	judgementField = new openfl.text.TextField();
 		judgementField.multiline = true;
 		judgementField.wordWrap = false;
 		judgementField.selectable = false;
 		judgementField.width = 260;
 		judgementField.height = 220;
 		judgementField.defaultTextFormat = new openfl.text.TextFormat('VCR OSD Mono', 16, 0xFFFFFFFF);
-		judgementField.x = 10 + jcOff[0];
-		judgementField.y = FlxG.height / 2 - 65 + jcOff[1];
-		judgementField.visible = !ClientPrefs.data.hideHud && ClientPrefs.data.showJudgementCounter;
-		FlxG.stage.addChild(judgementField);
+		// 挂进 HUD 相机的 canvas（而非 FlxG.stage）：坐标自动用逻辑像素、
+		// alpha/visible/zoom 全部随相机。谱面事件 doTweenAlpha('camHUD', 0/1)
+		// 隐藏 HUD 时它会一起隐没，也不再浮在 flixel 相机之外的最上层。
+		// blit 渲染模式下 canvas 为 null，才回退到 stage（由 syncJudgementToHUD 手动对齐）。
+		var hudCanvas = (st.camHUD != null) ? st.camHUD.canvas : null;
+		if (hudCanvas != null) hudCanvas.addChild(judgementField);
+		else FlxG.stage.addChild(judgementField);
+		trace('[GameHUD] judgementField parent=' + (hudCanvas != null ? 'camHUD.canvas' : 'stage'));
 		st.judgementField = judgementField;
+		syncJudgementToHUD();
+		judgementField.visible = !ClientPrefs.data.hideHud && ClientPrefs.data.showJudgementCounter && judgementCamActive();
 
 		// 行着色格式：复用同一实例（原实现每次 update 都 new 两个 TextFormat）
 		judgementCyan = new openfl.text.TextFormat('VCR OSD Mono', 16, 0xFF00FFFF);
@@ -4158,6 +4197,52 @@ class GameHUD
 		return isPlayer ? ((percent < 20) ? 1 : 0) : ((percent > 80) ? 1 : 0);
 	}
 
+	/**
+	 * 判定计数侧边栏默认挂在 `camHUD.canvas` 里，坐标 / 透明度 / 层级全部由相机管理
+	 * （2026-11-14 修「浮在屏幕最上层 / events 管不着」）。
+	 * 只有 blit 渲染模式（canvas == null）回退到 `FlxG.stage` 时，才需要手动补两处：
+	 *  ① 坐标与字号按 `FlxG.scaleMode.scale` 换算到 stage 像素；
+	 *  ② 透明度跟随 `camHUD.alpha`（Hide Hud / HUD Switch 事件走
+	 *     `doTweenAlpha('camHUD', 0/1, ...)`）。
+	 * tile 渲染下 sx=sy=1、alpha 由 canvas 承担，坐标即逻辑像素。
+	 */
+	function syncJudgementToHUD():Void
+	{
+		if (judgementField == null || st == null) return;
+		var cam = st.camHUD;
+		var onStage:Bool = (cam == null || cam.canvas == null);
+		var sx:Float = 1;
+		var sy:Float = 1;
+
+		if (onStage)
+		{
+			var sm = FlxG.scaleMode;
+			if (sm != null) { sx = sm.scale.x; sy = sm.scale.y; }
+			if (!(sx > 0)) sx = 1;
+			if (!(sy > 0)) sy = 1;
+			if (cam != null)
+			{
+				var a:Float = cam.alpha;
+				if (a < 0) a = 0;
+				if (a > 1) a = 1;
+				if (judgementField.alpha != a) judgementField.alpha = a;
+			}
+		}
+
+		var jcOff:Array<Float> = st.hudGetOffset('judgementTxt');
+		judgementField.x = (10 + jcOff[0]) * sx;
+		judgementField.y = (FlxG.height / 2 - 65 + jcOff[1]) * sy;
+		if (judgementField.scaleX != sx) judgementField.scaleX = sx;
+		if (judgementField.scaleY != sy) judgementField.scaleY = sy;
+	}
+
+	/** 侧边栏可见 = 设置开关 + HUD 相机仍在显示（events 淡出/隐藏 camHUD 时一并隐没）。 */
+	function judgementCamActive():Bool
+	{
+		var cam = st != null ? st.camHUD : null;
+		return cam == null || (cam.visible && cam.alpha > 0);
+	}
+
 	function updateJudgementTxt():Void
 	{
 		if (judgementField == null) return;
@@ -4171,10 +4256,9 @@ class GameHUD
 		}
 
 		// 可见性权威：隐藏时提前返回，不做任何字符串构建 / 文本操作（省每帧开销）
-		var jcOff:Array<Float> = st.hudGetOffset('judgementTxt');
-		judgementField.x = 10 + jcOff[0];
-		judgementField.y = FlxG.height / 2 - 65 + jcOff[1];
-		judgementField.visible = !ClientPrefs.data.hideHud && ClientPrefs.data.showJudgementCounter;
+		// stage 级 TextField 需手动对齐 HUD 相机的坐标系与透明度
+		syncJudgementToHUD();
+		judgementField.visible = !ClientPrefs.data.hideHud && ClientPrefs.data.showJudgementCounter && judgementCamActive();
 		if (!judgementField.visible) return;
 
 		// —— 【5Hz 刷新节流】botplay/密集批下 Hits 每帧都在涨，下方的数值签名守卫每帧
@@ -4371,7 +4455,7 @@ class GameHUD
 			var wmAlpha:Float = ClientPrefs.data.watermarkDim ? HudStyles.WATERMARK_DIM_ALPHA : 1;
 			if (songTxt.alpha != wmAlpha) songTxt.alpha = wmAlpha;
 		}
-		if (judgementField != null) judgementField.visible = !hide && ClientPrefs.data.showJudgementCounter;
+		if (judgementField != null) judgementField.visible = !hide && ClientPrefs.data.showJudgementCounter && judgementCamActive();
 
 		// 极简血条：血条移到 Score 栏位置，scoreTxt 垂直居中嵌入血条（无图标、无阴影）
 		if (minimal && healthBar != null && scoreTxt != null)

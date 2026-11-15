@@ -366,6 +366,7 @@ SKIP_REASONS = [
     ("source/backend/CoolUtil.hx", "携带模式标记文件的正文（写进引擎目录的 portable 文件，给使用者看，不是界面文案）"),
     ("source/backend/CrashHandler.hx", "崩溃报告文件正文（写进 crash/*.txt，给开发者看）"),
     ("source/backend/Achievements.hx", "成就数据表 RAW：中文为唯一真源，显示走 nameOf/descOf/triggerOf"),
+    ("source/backend/CameraEditorData.hx", "演出编排事件值提示/中文名数据表 RAW：中文为唯一真源（DCE 同构），编辑器直接显示"),
     ("source/backend/ClientPrefs.hx", "存档值字面量：改了会静默失效（显示由 optionValue.* 负责）"),
     ("source/backend/DesignTokens.hx", "主题名：显示走 themeNameAt()"),
     ("source/luagraph/LuaCodeGen.hx", "CUSTOM_BEGIN/MANAGED_BEGIN 是 .lua 往返标记"),

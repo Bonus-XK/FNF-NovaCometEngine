@@ -49,7 +49,39 @@ source/backend/Achievements.hx	通关一首曲目，最终准确率低于 20%（
 source/backend/Achievements.hx	通关一首曲目，最终准确率达到 100%（不可开启练习或自动游玩）	1	成就数据表 RAW：中文为唯一真源，显示走 nameOf/descOf/triggerOf
 source/backend/Achievements.hx	长按任意箭头十秒钟	1	成就数据表 RAW：中文为唯一真源，显示走 nameOf/descOf/triggerOf
 source/backend/Achievements.hx	高分！	1	成就数据表 RAW：中文为唯一真源，显示走 nameOf/descOf/triggerOf
-source/backend/CameraHudDomain.hx	 · 	2	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
+source/backend/CameraEditorData.hx	 事件	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/backend/CameraEditorData.hx	 事件)	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/backend/CameraEditorData.hx	GF 点头速度	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	Hey! 动作	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	[CameraEditor] 已从谱面生成基准编排 cam.json (	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/backend/CameraEditorData.hx	[CameraEditor] 已合并 cam 编排: 	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/backend/CameraEditorData.hx	值1: X 坐标\\n值2: "Y,时长,缓动"\\n  （后两项可省略，默认 0.5,quadInOut）\\n  INSTANT 忽略时长\\n留空两个 = 恢复自动跟随	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	值1: 动画名\\n值2: 角色\\n  boyfriend / dad / girlfriend	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	值1: 对焦目标\\n  boyfriend / dad / girlfriend\\n  pos = 固定坐标\\n值2: "偏移X,偏移Y,时长,缓动"\\n  （后两项可省略，默认 2,CLASSIC）\\n  CLASSIC / INSTANT 忽略时长	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	值1: 摄像机加量\\n  （默认 0.015）\\n值2: UI 加量\\n  （默认 0.03）	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	值1: 目标缩放\\n  （如 1.1）\\n值2: "时长,缓动,模式"\\n  （如 "2,linear,direct"）\\n  模式 direct = 绝对缩放\\n  模式 stage = 舞台缩放倍数	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	值1: 角度(度)\\n  （如 -10 / 10，0 = 回正）\\n值2: "时长,缓动"\\n  （如 "0.3,quadOut"）	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	切换角色	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	切换角色\\n值1: dad / boyfriend / girlfriend\\n值2: 新角色的角色 ID	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	屏幕震动	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	待机动画后缀	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	播放动画	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	播放声音	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	播放音效\\n值1: 音效文件名\\n值2: 音量（0 到 1，默认 1）	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	改变滚动速度	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	改变音符滚动速度\\n值1: 速度倍率（1 为标准速度）\\n值2: 过渡时长（秒）	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	缩放镜头	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	聚焦镜头	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	自定义事件：\\n值1 / 值2 任意内容\\n（由 Lua / HScript 处理）	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	触发 Hey! 动作\\n值1: BF、GF 或留空（两人）\\n值2: 动作时长（秒），留空默认 0.6	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	触发摄像机与 HUD 震动\\n值1: 摄像机"时长,强度"\\n值2: HUD"时长,强度"	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	设置 GF 点头速度\\n值1: 正整数速度倍率，例如 1、2、4	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	设置属性	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	设置游戏对象属性\\n值1: 属性路径\\n值2: 要写入的值	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	设置角色 idle 动画后缀\\n值1: dad / boyfriend / girlfriend\\n值2: 后缀，例如 -alt；留空清除	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	跟随坐标	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	镜头冲击	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/backend/CameraEditorData.hx	镜头角度	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
 source/backend/CameraHudDomain.hx	歌曲名称	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/backend/ClientPrefs.hx	KE 判定	1	存档值字面量：改了会静默失效（显示由 optionValue.* 负责）
 source/backend/ClientPrefs.hx	PE 判定	2	存档值字面量：改了会静默失效（显示由 optionValue.* 负责）
@@ -212,7 +244,6 @@ source/backend/HostDomain.hx	ms）	1	诊断日志（trace / Sys.println / FlxG.l
 source/backend/HostDomain.hx	已过时间	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/backend/HostDomain.hx	歌曲名称	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/backend/HudStyles.hx	 · 	3	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
-source/states/PlayState.hx	 · 	2	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/backend/InputDomain.hx	KE 判定	4	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
 source/backend/ModInstallUI.hx	…	1	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/backend/ModInstallUI.hx	下载完成	1	m.title == '安装完成' 状态比较
@@ -856,6 +887,7 @@ source/options/PerformanceSubState.hx	配合快速跳谱使用；普通游玩逐
 source/options/PerformanceSubState.hx	重叠隐藏间距	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/PerformanceSubState.hx	限制同时存在的音符对象数量（0 = 不限）。堆叠谱面防爆内存时使用；\\n	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/PerformanceSubState.hx	默认关闭以保持与旧版完全一致的绘制顺序	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/ProgrammingSettingsSubState.hx	JS 脚本兼容	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	Lua 0.6.3 兼容	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	Psych 0.6.3 兼容模式	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	Psych 0.7.3 脚本兼容	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -868,6 +900,7 @@ source/options/ProgrammingSettingsSubState.hx	加载 scripting/states/<界面名
 source/options/ProgrammingSettingsSubState.hx	可取消事件	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启 Meteoric 脚本系统：允许用 HScript 写脚本改玩法 / 界面。\\n脚本放在模组的 scripting/ 目录里，改完按 F5 立即生效，不用重开游戏。\\n关闭时引擎行为与没有这个功能完全一致。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后允许谱面使用音符模表：谱面目录放 modchart.json，或在 Lua 脚本里调 startMod / setMod / set / ease 等函数，\\n可以让音符位移、旋转、缩放、消失（3D 透视可用）。\\n只有带模表数据的谱面才会生效，没有模表数据的谱面零开销、零变化。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
+source/options/ProgrammingSettingsSubState.hx	开启后加载 Psych 风格 scripts/ 目录下的 .js 脚本（QuickJS 运行时，真 JavaScript 语法）。\\n脚本可收到 onCreate / onUpdate / onBeatHit / onStepHit / onDestroy 等回调，通过 setVar / getVar / console.log 与引擎交互。\\n默认关闭；关闭时不创建 JS 运行时，零行为变化。	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，Lua 脚本的停止哨兵按 Psych Engine 0.6.3 的数字约定处理（Function_Continue=0 / Function_Stop=1 / Function_StopLua=2）。\\n0.6.3 老模组的 return Function_StopLua 无效（脚本停不下来）时试试这个	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，关闭强制音符烘焙，兼容 Psych Engine 0.6.3 模组的箭头贴图格式（箭头不显示时试试这个）	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
 source/options/ProgrammingSettingsSubState.hx	开启后，补全 Psych Engine 0.7.3 的脚本 API 与回调：Lua 侧 getModSetting / removeHScript / getSoundPitch / setSoundPitch / eraseSaveData / setTextAutoSize、\\nsetTextBorder 的 style 参数，以及 5 个 Pre 系回调（preUpdateScore / onKeyPressPre / onKeyReleasePre / goodNoteHitPre / opponentNoteHitPre）。\\n与「Psych 1.0.4 模组兼容」叠加时，命中 Pre 回调可取消（1.0.4 语义）。默认关闭	1	Option 兜底原文：Option 构造函数统一走 option/optionDesc/optionValue
@@ -982,7 +1015,6 @@ source/scripting/lua/ObjectBridge.hx	[ObjectBridge] 构造 $clsName 失败: $e	1
 source/scripting/lua/ShaderFunctions.hx	[setSpriteShader] macOS 跳过 sprite shader（渲染层会崩）: 	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/scripting/lua/TextFunctions.hx	setTextHeight: Meteoric 的 FlxText 恒为自动高度（autoSize），该调用无效果	1	Meteoric 脚本层的诊断日志（log()/logError()，终端可见，非界面文案）
 source/shaders/CRTShader.hx	[CRTShader] GL 编译失败，走默认渲染管线: $error	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
-source/shaders/ErrorHandledShader.hx	[ErrorHandledShader] GL 编译失败，改用默认渲染管线: $name\\n$error	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/shaders/GlobalShaderHandler.hx	[GlobalShaderHandler] ClientPrefs 的 shaders 总闸已关闭，拒绝启用	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/shaders/GlobalShaderHandler.hx	[GlobalShaderHandler] 未注册的全局 shader: $name	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/shaders/GlobalShaderHandler.hx	[GlobalShaderHandler] 游戏根对象未就绪	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
@@ -998,6 +1030,7 @@ source/states/MainMenuState.hx	[CRASH-TEST] 触发原生段错误	1	诊断日志
 source/states/MainMenuState.hx	[CRASH-TEST] 输入 crash，弹出崩溃模式选择	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/states/ModsMenuState.hx	…	4	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/states/OutdatedState.hx	→	1	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
+source/states/PlayState.hx	 · 	2	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/states/PlayState.hx	 触发密集自动档（对象上限/对象池/自适应预算/安静命中生效）	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/states/PlayState.hx	 触发超密集谱面自动合并（skipGhostNotes 被强制开启）	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/states/PlayState.hx	KE 判定	1	存档值比较（改了会静默失效；显示由 optionValue.* 负责）
@@ -1017,6 +1050,18 @@ source/states/TitleState.hx	 无上限档取值=	1	诊断日志（trace / Sys.pr
 source/states/TitleState.hx	[FRAMERATE] 档位=	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/states/TitleState.hx	无	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
 source/states/TitleState.hx	有	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/states/editors/ChoreoEditorState.hx	 · 	1	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
+source/states/editors/ChoreoEditorState.hx	 · Alt+	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/states/editors/ChoreoEditorState.hx	 挂接中断（部分背景可用）：	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/states/editors/ChoreoEditorState.hx	% · 	2	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
+source/states/editors/ChoreoEditorState.hx	+层	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/states/editors/ChoreoEditorState.hx	-层	1	?未知原因，请补进 SKIP_REASONS 或按内容特征扩充判定
+source/states/editors/ChoreoEditorState.hx	[Choreo] cam.json 已保存: 	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/states/editors/ChoreoEditorState.hx	[Choreo] inst 加载失败: 	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/states/editors/ChoreoEditorState.hx	[Choreo] tutorial 也不可用，以空谱面继续	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/states/editors/ChoreoEditorState.hx	[Choreo] 舞台 	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/states/editors/ChoreoEditorState.hx	[Choreo] 载谱失败，回退 tutorial	1	诊断日志（trace / Sys.println / FlxG.log / [Tag] 前缀，release 不可见）
+source/states/editors/ChoreoEditorState.hx	：	2	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/states/editors/LuaGraphEditorState.hx	…	2	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/states/editors/LuaGraphEditorState.hx	「	1	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）
 source/states/editors/LuaGraphEditorState.hx	」	1	分隔符/标点片段（连接已翻译文本，含中英括号成对拆分）

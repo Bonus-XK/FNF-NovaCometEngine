@@ -1,4 +1,18 @@
-# Vulkan 轨道路线图（渲染后端二开）
+# Vulkan 轨道路线图（渲染后端二开）—— 已废弃归档
+
+> ⚠ **状态（2026-11-10）：整条 Vulkan 轨已从引擎侧删除，本文仅作历史留档。**
+> - 11-09/11-10 曾恢复 P0 子系统与画面镜像，并在 arm64 / lime-meteoric 8.4 + MoltenVK
+>   上实机跑通（`[Renderer] Vulkan 画面镜像已开启`）。但单窗口 Vulkan 显示在当前栈
+>   不可行：OpenFL 9.2.1 无 Vulkan 渲染器、lime 8.4 的 Vulkan 绑定窗口耦合、一个 SDL
+>   窗口只能有一个 context type。镜像只能「GL 主窗 → CPU 回读 → Vulkan 副窗」重画一遍，
+>   带来裁剪/缩放异常、双份缓冲内存与系统级干扰；用户于 22:32 决定整体删除。
+> - 删除范围：`RendererBackend.hx`、`ClientPrefs` 两字段、图像设置页两项、
+>   `TitleState` 调用、语言包 19 键、i18n 基线 5 行、`Project.xml` 的
+>   `lime-vulkan` haxedef、`compile-mac.sh` 的 `-Dlime-vulkan` 与
+>   `METEORIC_VULKAN_MIRROR`、启动器的 `DYLD_LIBRARY_PATH`。`haxelib dev` 已切回
+>   `~/lime-full`（8.2.2）。实现全部保留在 git 历史与 lime-meteoric fork。
+> - JS 脚本（QuickJS）不受影响，保留。
+> - 下方 2026-10-25 快照为当时技术记录，**不代表当前工作树状态**。
 
 > 状态基线：2026-10-25 深夜。**P0/P1/P2 全部完成**：
 > P0 已合入 master（`15f13d9`）；P1 沙盒跑通；P2 合并树构建 + 引擎完整验证通过

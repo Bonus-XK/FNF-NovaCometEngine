@@ -5,10 +5,6 @@
 	   里的条件（unless="meteoric_no_sdl_sound"）与 hxcpp Build.xml 的 OBJEXT 门控都要在
 	   lime 被拉入的瞬间看到它们；放在下方 Haxedefines 区（库声明之后）会全部失效（实测）。 -->
 
-	<!-- Vulkan 轨道（lime-meteoric 8.4）：lime 的 Vulkan CFFI/VKRenderer 编进 ndll。
-	     主窗口仍是 OpenGL（零行为变化）；rendererBackend='vulkan' 时 RendererBackend 才会
-	     创建隐藏 Vulkan 窗口（见 backend/RendererBackend.hx 与 docs/VULKAN-ROADMAP.md）。 -->
-	<haxedef name="lime-vulkan" if="desktop" />
 	<!-- sdl_sound 是 SDL2 时代库，lime-meteoric 原生侧默认不编（其 Build.xml 同名开关）；
 	     Haxe 侧必须同步关（lime include.xml 的 haxedef 带 unless="meteoric_no_sdl_sound" 逃生口），
 	     否则音频流式路径调用不存在的 CFFI 原语（缺 prime 警告 + 流式失败）。关闭后回落 vorbis 直读。 -->
@@ -43,6 +39,9 @@
 	<define name="MODS_ALLOWED" if="desktop || mobile" />
 	<define name="HSCRIPT_ALLOWED" if="desktop || mobile" />
 	<define name="LUA_ALLOWED" if="desktop || mobile" unless="hl"/>
+	<!-- QuickJS .js scripts: hxcpp static binding only (third_party/quickjs, @:native).
+	     Default runtime behaviour is unchanged; gated by ClientPrefs.data.jsScriptingEnabled. -->
+	<define name="JS_ALLOWED" if="desktop || mobile" unless="hl"/>
 	<define name="ACHIEVEMENTS_ALLOWED" />
 	<!-- 安卓禁用视频：hxCodec 预编译的 VLC 库为 4KB 对齐，不符合 Android 15+ 的 16KB 页对齐要求。
 	     Linux 同样禁用：hxCodec 3.0.2 只带 Windows/macOS 的 VLC 运行时（dll/MacOS+dll/Windows），
@@ -195,7 +194,7 @@
 	<haxedef name="HXC_LIBVLC_LOGGING" if="VIDEOS_ALLOWED debug" />
 	
 	<!-- ______________________________ Haxedefines _____________________________ -->
-	<!--（lime-vulkan / meteoric_no_sdl_sound 见文件顶部——必须在库声明之前）-->
+	<!--（meteoric_no_sdl_sound 见文件顶部——必须在库声明之前）-->
 	<!--Enable the Flixel core recording system-->
 	<!--<haxedef name="FLX_RECORD" />-->
 

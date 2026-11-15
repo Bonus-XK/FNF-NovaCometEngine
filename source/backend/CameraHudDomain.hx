@@ -671,12 +671,24 @@ class CameraHudDomain
 			var zoomKeys:Array<String> = [];
 			for (k in ps.cameraZoomTweens.keys()) zoomKeys.push(k);
 			for (k in zoomKeys) cancelZoomTween(ps, k);
+
+			// Camera Angle 的角度补间（演出编排）：game 相机角度归零并停补间
+			if (ps.camGame != null)
+			{
+				FlxTween.cancelTweensOf(ps.camGame, ['angle']);
+				ps.camGame.angle = 0;
+			}
 		}
 		else
 		{
 			var key:String = cameraKeyFor(ps, camName);
 			cancelScrollTween(ps, key);
 			cancelZoomTween(ps, key);
+			if (key == 'game' && ps.camGame != null)
+			{
+				FlxTween.cancelTweensOf(ps.camGame, ['angle']);
+				ps.camGame.angle = 0;
+			}
 		}
 	}
 
@@ -706,6 +718,9 @@ class CameraHudDomain
 	static function getEase(?ease:String):EaseFunction
 	{
 		if (ease == null || ease.trim().length == 0) return null;
+		// custom: 采样曲线（演出编排编辑器写出，DCE 同构编码）
+		var customFn:Null<Float->Float> = ChoreoEase.resolve(ease);
+		if (customFn != null && ChoreoEase.isCustomToken(ease)) return customFn;
 		return scripting.lua.LuaUtils.getTweenEaseByString(ease);
 	}
 }

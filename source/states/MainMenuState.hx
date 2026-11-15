@@ -378,7 +378,17 @@ class MainMenuState extends MusicBeatState
 				MusicBeatState.switchState(new TitleState());
 			}
 
-			if (backend.DebugLaunch.autoSong != null)
+			if (backend.DebugLaunch.autoEditor == 'choreo')
+			{
+				// 调试启动参数：直进演出编排编辑器（一次性；未知 id 不加锁，走正常菜单）
+				backend.DebugLaunch.autoEditor = null;
+				if (backend.DebugLaunch.autoMod != null)
+					Mods.currentModDirectory = backend.DebugLaunch.autoMod;
+				selectedSomethin = true;
+				FlxG.sound.play(Paths.sound('confirmMenu'));
+				LoadingState.loadAndSwitchState(new states.editors.ChoreoEditorState(), false);
+			}
+			else if (backend.DebugLaunch.autoSong != null)
 			{
 				// 调试启动参数：自动选中 freeplay 并确认（selectedSomethin 锁只进一次）
 				var fp:Int = optionShit.indexOf('freeplay');

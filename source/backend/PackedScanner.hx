@@ -123,14 +123,52 @@ class PackedScanner
 		scanOne(path);
 	}
 
-	function scanOne(path:String):Void
+	/**
+	 * 开始一个 Part：重置分块窗口与状态机，按键数重建合并槽位。
+	 * 跨 Part 的合并状态（lastLane / out / 计数）保持不变。
+	 *
+	 * 压缩谱面（.mec）由 Song 直接调用 beginPart() → feed() → endPart()，
+	 * 把流式解压出的字节块喂进同一个合并器，语义与文件扫描完全一致，
+	 * 且解压产物不会整份物化。merge 传 null 时保留 scan() 已设好的值。
+	 */
+	public function beginPart(?merge:Null<Bool>):Void
 	{
+		if (merge != null) doMerge = merge;
 		// Extra Keys：按键数重置合并槽位（跨 Part 保持，仅在 keys 变化时重建）
 		if (lastLane.length != keys)
 		{
 			lastLane = [];
 			for (i in 0...keys) lastLane.push(null);
 		}
+		buf = Bytes.alloc(0);
+		cur = 0;
+		state = S_SEEK;
+	}
+
+	/** 喂入一块解压后的 JSON 字节；len >= 0 时只有前 len 字节有效（缓冲区被复用）。 */
+	public function feed(b:Bytes, len:Int = -1):Void
+	{
+		if (b == null || b.length == 0) return;
+		var chunk:Bytes = (len >= 0 && len < b.length) ? b.sub(0, len) : b;
+		if (chunk.length == 0) return;
+		append(chunk);
+		process(false);
+		if (buf.length - cur > CARRY_MAX) throw 'packed scanner carry overflow: ' + (buf.length - cur);
+	}
+
+	/** 收尾一个 Part：冲刷残留并清空窗口，不重置跨 Part 的合并状态。 */
+	public function endPart():Void
+	{
+		process(true);
+		// 清掉可能残留在缓冲里的半截 section，避免污染下一个 Part
+		buf = Bytes.alloc(0);
+		cur = 0;
+		state = S_SEEK;
+	}
+
+	function scanOne(path:String):Void
+	{
+		beginPart();
 		var input:FileInput = File.read(path);
 		if (input == null) return;
 		var total:Int = 0;
@@ -149,9 +187,6 @@ class PackedScanner
 			return;
 		}
 
-		buf = Bytes.alloc(0);
-		cur = 0;
-		state = S_SEEK;
 		var left:Int = total;
 		while (left > 0)
 		{
@@ -160,16 +195,10 @@ class PackedScanner
 			var b:Bytes = input.read(want);
 			left -= want;
 			if (b == null || b.length == 0) break;
-			append(b);
-			process(false);
-			if (buf.length - cur > CARRY_MAX) throw 'packed scanner carry overflow: ' + (buf.length - cur);
+			feed(b);
 		}
 		input.close();
-		process(true);
-		// 文件收尾：清掉可能残留在缓冲里的半截 section，避免污染下一个 Part
-		buf = Bytes.alloc(0);
-		cur = 0;
-		state = S_SEEK;
+		endPart();
 	}
 
 	/**

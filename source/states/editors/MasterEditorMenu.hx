@@ -42,7 +42,8 @@ class MasterEditorMenu extends MusicBeatState
 
 	static final LIST_X:Float = 88;
 	static final LIST_Y:Float = 152;
-	static final ROW_GAP:Float = 56;
+	// 56 → 52：条目增至 9 行（演出编排），152 + 8*52 + 46 = 614 ≤ 面板底 640（UI-DESIGN §3 验算）
+	static final ROW_GAP:Float = 52;
 
 	static final INFO_X:Float = 772;
 	static final INFO_W:Float = 400;
@@ -56,7 +57,8 @@ class MasterEditorMenu extends MusicBeatState
 		['dialogue', Lang.tOr('editor.dialogue', '对话编辑器'), Lang.tOr('editor.dialogue.enName', 'Dialogue Editor'), Lang.tOr('editor.dialogue.desc', '编辑游戏内对话脚本、演出与表情切换。'), 0xFFFF8A8A],
 		['dialogueChar', Lang.tOr('editor.dialogueChar', '对话立绘编辑器'), Lang.tOr('editor.dialogueChar.enName', 'Dialogue Portrait Editor'), Lang.tOr('editor.dialogueChar.desc', '编辑对话角色的立绘资源与动画。'), 0xFFFF9E5E],
 		['noteSplash', Lang.tOr('editor.splashDebug', '音符溅射调试'), Lang.tOr('editor.noteSplash.enName', 'Note Splash Debug'), Lang.tOr('editor.splashDebug.desc', '调试音符打击特效的贴图与帧动画。'), 0xFFB0B6FF],
-		['luagraph', Lang.tOr('editor.luagraph', 'Lua 图形化编程'), Lang.tOr('editor.luagraph.enName', 'Lua Visual Script'), Lang.tOr('editor.luagraph.desc', '用积木块拼出 Lua 脚本：多事件栈、参数槽直接编辑、生成 .lua 与 .luagraph.json（桌面端）。'), 0xFF9CE8FF]
+		['luagraph', Lang.tOr('editor.luagraph', 'Lua 图形化编程'), Lang.tOr('editor.luagraph.enName', 'Lua Visual Script'), Lang.tOr('editor.luagraph.desc', '用积木块拼出 Lua 脚本：多事件栈、参数槽直接编辑、生成 .lua 与 .luagraph.json（桌面端）。'), 0xFF9CE8FF],
+		['choreo', Lang.tOr('editor.choreo', '演出编排'), Lang.tOr('editor.choreo.enName', 'Choreography Editor'), Lang.tOr('editor.choreo.desc', '事件与相机的时间轴编排：舞台预览、拖动移镜、滚轮缩放、吸附写入（桌面端）。'), 0xFFFFA0E0]
 	];
 
 	var rows:Array<MenuText> = [];
@@ -91,10 +93,10 @@ class MasterEditorMenu extends MusicBeatState
 		Paths.clearUnusedMemory();
 		Lib.application.window.title = Lang.tOr('win.editorsMenu', "NovaComet Engine - Editors Menu");
 
-		// Lua 图形化编辑器为桌面端功能（拖拽 + 键盘）：Android 上直接隐藏该条目，
-		// 避免暴露一个用不了的界面（其它 7 项行为不变）。
+		// Lua 图形化编辑器 / 演出编排均为桌面端功能（鼠标拖拽 + 键盘）：移动端直接隐藏条目，
+		// 避免暴露一个用不了的界面（其余条目行为不变）。
 		#if mobile
-		optionShit = optionShit.filter(function(row) return row[0] != 'luagraph');
+		optionShit = optionShit.filter(function(row) return row[0] != 'luagraph' && row[0] != 'choreo');
 		#end
 
 		// ---- 背景 ----
@@ -372,6 +374,8 @@ class MasterEditorMenu extends MusicBeatState
 			case 'luagraph':
 				// 与 Chart/Character/Dialogue 编辑器一致：走 LoadingState（先加载资源再切状态）
 				LoadingState.loadAndSwitchState(new LuaGraphEditorState(), false);
+			case 'choreo':
+				LoadingState.loadAndSwitchState(new ChoreoEditorState(), false);
 		}
 
 		FlxG.sound.music.volume = 0;

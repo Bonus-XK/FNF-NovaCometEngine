@@ -125,13 +125,8 @@ class Song
 	{
 		var filePath:String = resolveChartPath(jsonInput, folder);
 		if (filePath == null) return;
-		#if (sys && !android)
-		try
-		{
-			if (FileSystem.stat(filePath).size < CHART_DOM_KEEP_MAX) return;
-		}
-		catch (e:Dynamic) return;
-		#end
+		// .mec 用解压后的原始大小判定（压缩后文件可能只有原来的 1/10）
+		if (chartLogicalSize(filePath) < CHART_DOM_KEEP_MAX) return;
 		evictChartFromCache(jsonInput, folder);
 	}
 
@@ -316,6 +311,90 @@ class Song
 		return Difficulty.isPartsDifficulty(jsonInput.substr(jsonInput.lastIndexOf('-') + 1));
 	}
 
+	// ========================================================================
+	// 压缩谱面（.mec）：读盘 / 文本 / 头部 / 逻辑大小的统一入口
+	// 载荷由 backend.ChartCodec 解码，解压产物与源 .json 字节一致，
+	// 因此 parseJSONshit / PackedScanner 的按字节解析语义完全不变。
+	// ========================================================================
+
+	// v2 LZMA 解码器：ChartCodec 保持纯 Haxe（便于离线工具独立编译自测），
+	// lime 原生 LZMA1 解码由这里一次性注入。所有 .mec 读盘路径都经过本函数。
+	static var codecReady:Bool = false;
+	static function ensureCodec():Void
+	{
+		if (codecReady) return;
+		codecReady = true;
+		ChartCodec.lzmaDecoder = function(b:haxe.io.Bytes):haxe.io.Bytes
+		{
+			return lime.utils.Bytes.fromBytes(b).decompress(lime.utils.CompressionAlgorithm.LZMA);
+		};
+	}
+
+	/** 读整份谱面文件字节：磁盘优先，内嵌资源（Android Assets）兜底。 */
+	public static function readChartBytes(filePath:String):haxe.io.Bytes
+	{
+		ensureCodec();
+		#if sys
+		if (FileSystem.exists(filePath)) return File.getBytes(filePath);
+		#end
+		return Assets.getBytes(filePath);
+	}
+
+	/** 只读前 n 字节（.mec 头 + 头部预览），避免为读元数据整份读盘。 */
+	static function readChartHeadBytes(filePath:String, n:Int):haxe.io.Bytes
+	{
+		#if sys
+		if (FileSystem.exists(filePath))
+		{
+			var input:FileInput = File.read(filePath);
+			try
+			{
+				var total:Int = FileSystem.stat(filePath).size;
+				var want:Int = (total < n) ? total : n;
+				if (want <= 0) { input.close(); return haxe.io.Bytes.alloc(0); }
+				var b:haxe.io.Bytes = input.read(want);
+				input.close();
+				return b;
+			}
+			catch (e:Dynamic) { try { input.close(); } catch (e2:Dynamic) {} }
+		}
+		#end
+		return Assets.getBytes(filePath);
+	}
+
+	/** 谱面文本：.mec 还原成与源 .json 一致的文本；其它文件走原读法。 */
+	public static function readChartText(filePath:String):String
+	{
+		if (ChartCodec.isPackedPath(filePath))
+			return ChartCodec.inflateToString(readChartBytes(filePath));
+		#if sys
+		if (FileSystem.exists(filePath)) return File.getContent(filePath);
+		#end
+		return Assets.getText(filePath);
+	}
+
+	/**
+	 * 「逻辑大小」：.mec 取解压后的原始字节数，.json 取磁盘大小。
+	 * STREAM_CHART_MIN / CHART_DOM_KEEP_MAX 必须按它判定，否则压缩会让
+	 * 大谱面被误判成小谱面 → 绕过 packed 路径 → 整份 DOM 常驻爆内存。
+	 */
+	public static function chartLogicalSize(filePath:String):Int
+	{
+		if (ChartCodec.isPackedPath(filePath))
+		{
+			try
+			{
+				var h:ChartHeader = ChartCodec.readHeader(readChartHeadBytes(filePath, ChartCodec.HEADER_SIZE));
+				return h.rawSize > 2147483000 ? 2147483000 : Std.int(h.rawSize);
+			}
+			catch (e:Dynamic) { trace('[CHARTPACK] header read failed: ' + Std.string(e)); }
+		}
+		#if sys
+		try { return FileSystem.stat(filePath).size; } catch (e:Dynamic) {}
+		#end
+		return 0;
+	}
+
 	public static function resolveChartPath(jsonInput:String, ?folder:String):String
 	{
 		// 多 Part 组合难度：本体文件不存在，用**第一个 Part** 的真实路径作为
@@ -335,21 +414,9 @@ class Song
 		var formattedFolder:String = Paths.formatToSongPath(folder);
 		var formattedSong:String = Paths.formatToSongPath(jsonInput);
 
-		#if MODS_ALLOWED
-		var moddyFile:String = Paths.modsJson(formattedFolder + '/' + formattedSong);
-		if(FileSystem.exists(moddyFile)) return moddyFile;
-		#end
-
-		var baseFile:String = Paths.json(formattedFolder + '/' + formattedSong);
-		#if (sys && !android)
-		if(FileSystem.exists(baseFile)) return baseFile;
-		#end
-		// 安卓：Paths.json 可能返回外部存储的绝对路径（/sdcard/meteoric/assets/...），
-		// 必须用 FileSystem 检查，否则外部谱面永远判为缺失
-		if(FileSystem.exists(baseFile)) return baseFile;
-		if(Assets.exists(baseFile, TEXT)) return baseFile;
-
-		return null;
+		// .mec 与 .json 共用 Paths.chartPath 的唯一口径：模组覆盖优先级不变，
+		// 同一位置压缩格式优先。安卓外部存储 / lime Assets 兜底也在里面。
+		return Paths.chartPath(formattedFolder + '/' + formattedSong);
 	}
 
 	static function chartCacheKey(filePath:String):String
@@ -384,6 +451,10 @@ class Song
 		var cachedHit:SwagSong = getCachedChart(chartCacheKey(filePath));
 		if (cachedHit != null) return copySong(cachedHit);
 
+		var isPacked:Bool = ChartCodec.isPackedPath(filePath);
+		// .mec 用解压后的原始大小判定大谱面（压缩后文件可能只有 1/10）
+		var logicalSize:Int = chartLogicalSize(filePath);
+
 		// ===== 音符级流式解析（超大字谱面专用，>= STREAM_CHART_MIN 字节）=====
 		// 旧路径（File.getContent + fastParseSong）在这类谱面上必崩：
 		//   ① 整份 JSON 读成单个 String（1.29GB → hxcpp 上 ~2.6GB UTF-16 连续驻留）
@@ -397,8 +468,7 @@ class Song
 		#if (sys && !android)
 		try
 		{
-			var sz:Int = 0;
-			try { sz = FileSystem.stat(filePath).size; } catch (eStat:Dynamic) { sz = 0; }
+			var sz:Int = logicalSize;
 			// 调试开关：METEORIC_NO_PACKED=1 强制走旧整读路径（用于 A/B 对照定位回归）
 			var packedDisabled:Bool = false;
 			try { packedDisabled = (Sys.getEnv("METEORIC_NO_PACKED") == "1"); } catch (eEnv:Dynamic) {}
@@ -416,17 +486,26 @@ class Song
 		#end
 
 		var rawJson = null;
-		#if (sys && !android)
-		rawJson = File.getContent(filePath).trim();
-		#else
-		#if sys
-		// 安卓：外置存储上的谱面是绝对路径，lime 资源表不认，直接读磁盘
-		if (FileSystem.exists(filePath))
-			rawJson = File.getContent(filePath).trim();
+		if (isPacked)
+		{
+			// .mec：解压得到与源 .json 完全一致的文本，后续解析链路零改动。
+			// 仅小谱面走这里；大谱面已在上方由 loadPackedChart 流式消费。
+			rawJson = ChartCodec.inflateToString(readChartBytes(filePath)).trim();
+		}
 		else
-		#end
-		rawJson = Assets.getText(filePath).trim();
-		#end
+		{
+			#if (sys && !android)
+			rawJson = File.getContent(filePath).trim();
+			#else
+			#if sys
+			// 安卓：外置存储上的谱面是绝对路径，lime 资源表不认，直接读磁盘
+			if (FileSystem.exists(filePath))
+				rawJson = File.getContent(filePath).trim();
+			else
+			#end
+			rawJson = Assets.getText(filePath).trim();
+			#end
+		}
 
 		while (!rawJson.endsWith("}"))
 		{
@@ -451,10 +530,7 @@ class Song
 		// 后台线程解析完成后也写入缓存（纯数据深拷贝），下次再选同一首谱面直接命中、不再解析
 		// 内存大关：大谱面（≥CHART_DOM_KEEP_MAX）绝不入缓存 —— 否则"淘汰→重开→重解析→再入缓存"
 		// 会让完整 DOM 反复常驻，1GB 目标失效。大谱面重开直接走本函数快速重解析（约 1~2s）。
-		var isLargeChart:Bool = false;
-		#if (sys && !android)
-		try { isLargeChart = FileSystem.stat(filePath).size >= CHART_DOM_KEEP_MAX; } catch (e:Dynamic) {}
-		#end
+		var isLargeChart:Bool = logicalSize >= CHART_DOM_KEEP_MAX;
 		if (!isLargeChart)
 			cacheChart(chartCacheKey(filePath), copySong(songJson));
 		return songJson;
@@ -894,7 +970,19 @@ class Song
 		var scanner:PackedScanner = new PackedScanner(ghostRange, ghostDensity, keepLimit);
 		scanner.keys = packedKeys;
 		scanner.absoluteCols = (packedFmt != null && packedFmt.startsWith('psych_v1'));
-		var clusters:Array<PackedChart> = scanner.scan(filePath, bpm, doMerge);
+		var clusters:Array<PackedChart>;
+		if (ChartCodec.isPackedPath(filePath))
+		{
+			// .mec：压缩载荷整份读入（通常只有原始大小的 5~15%），解压按 256KB
+			// 分块直接喂 PackedScanner，解压产物不整份物化 → 内存与音符总数无关。
+			var packedBytes:haxe.io.Bytes = readChartBytes(filePath);
+			scanner.beginPart(doMerge);
+			ChartCodec.inflate(packedBytes, function(b:haxe.io.Bytes, len:Int):Void scanner.feed(b, len));
+			scanner.endPart();
+			clusters = scanner.result();
+			trace('[CHARTPACK] streamed chart ' + filePath);
+		}
+		else clusters = scanner.scan(filePath, bpm, doMerge);
 		if (clusters == null) return null;
 		PerfProbe.mark('packed: scan done');
 		var st:Dynamic = scanner.stats();
@@ -1076,7 +1164,16 @@ class Song
 		{
 			if (p == null || !FileSystem.exists(p)) continue;
 			PerfProbe.mark('parts: scan begin ' + p);
-			scanner.scanPart(p);
+			if (ChartCodec.isPackedPath(p))
+			{
+				// 压缩 Part 与未压缩 Part 可混用：共用同一个 scanner，
+				// 同刻同轨的合并语义不变。
+				var partBytes:haxe.io.Bytes = readChartBytes(p);
+				scanner.beginPart(doMerge);
+				ChartCodec.inflate(partBytes, function(b:haxe.io.Bytes, len:Int):Void scanner.feed(b, len));
+				scanner.endPart();
+			}
+			else scanner.scanPart(p);
 			used++;
 			PerfProbe.mark('parts: scan done ' + p);
 		}
@@ -1225,19 +1322,34 @@ class Song
 
 		for (dir in dirs)
 		{
-			var found:Map<String, Int> = new Map();   // path → 数字序号
+			var byNum:Map<Int, String> = new Map();   // Part 序号 → 路径
+			var numOf:Map<String, Int> = new Map();   // path → 序号（排序用）
 			for (f in FileSystem.readDirectory(dir))
 			{
-				if (f.indexOf(prefix) != 0 || !StringTools.endsWith(f, '.json')) continue;
-				var numStr:String = f.substr(prefix.length, f.length - prefix.length - 5);
+				if (f.indexOf(prefix) != 0) continue;
+				var extLen:Int = 0;
+				if (StringTools.endsWith(f, '.mec')) extLen = 4;
+				else if (StringTools.endsWith(f, '.json')) extLen = 5;
+				else continue;
+				var numStr:String = f.substr(prefix.length, f.length - prefix.length - extLen);
 				var n:Null<Int> = Std.parseInt(numStr);
 				if (n == null) continue;   // 非纯数字后缀（如 -easy）不算 Part
-				found.set(dir + '/' + f, n);
+				var full:String = dir + '/' + f;
+				// 同一 Part 同时有 .json 与 .mec 时只取 .mec，
+				// 否则组合难度会把同一个 Part 的音符叠加两次。
+				var prev:String = byNum.get(n);
+				if (prev != null && StringTools.endsWith(prev, '.mec')) continue;
+				byNum.set(n, full);
+				numOf.set(full, n);
 			}
-			if (foundCount(found) < 2) continue;
+			// 按**去重后的 Part 序号**计数：同一 Part 同时有 .json/.mec 时
+			// numOf 里会残留被覆盖的旧路径，不能用它判断「至少两个 Part」。
+			var partCount:Int = 0;
+			for (_ in byNum.keys()) partCount++;
+			if (partCount < 2) continue;
 
-			var paths:Array<String> = [for (k in found.keys()) k];
-			paths.sort(function(a:String, b:String):Int return found.get(a) - found.get(b));
+			var paths:Array<String> = [for (k in byNum.keys()) byNum.get(k)];
+			paths.sort(function(a:String, b:String):Int return numOf.get(a) - numOf.get(b));
 			trace('[COMBO] enumerateAllPartPaths base=' + base + ' dir=' + dir + ' found=' + paths.length);
 			return paths;
 		}
@@ -1262,6 +1374,15 @@ class Song
 	{
 		try
 		{
+			if (ChartCodec.isPackedPath(filePath))
+			{
+				// 容器头里带原 JSON 前 8192 字节的未压缩预览，
+				// 大谱面不必为了读元数据解压 GB 级载荷。
+				var probe:haxe.io.Bytes = readChartHeadBytes(filePath, ChartCodec.HEADER_SIZE);
+				var h:ChartHeader = ChartCodec.readHeader(probe);
+				probe = readChartHeadBytes(filePath, ChartCodec.HEADER_SIZE + h.headLen);
+				return ChartCodec.headText(probe, h, n);
+			}
 			var input:FileInput = File.read(filePath);
 			if (input == null) return null;
 			var total:Int = FileSystem.stat(filePath).size;

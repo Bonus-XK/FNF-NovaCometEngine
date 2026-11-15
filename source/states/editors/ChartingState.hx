@@ -617,12 +617,13 @@ class ChartingState extends MusicBeatState
 		var loadEventJson:EditorButton = new EditorButton(CONTENT_X + CONTENT_RW + 24, y, CONTENT_RW, 34, Lang.tOr('chart.loadEvents', '加载事件'), function()
 		{
 			var songName:String = Paths.formatToSongPath(_song.song);
-			var file:String = Paths.json(songName + '/events');
+			var exists:Bool;
 			#if sys
-			if (#if MODS_ALLOWED FileSystem.exists(Paths.modsJson(songName + '/events')) || #end FileSystem.exists(file))
+			exists = Paths.chartPath(songName + '/events') != null;
 			#else
-			if (OpenFlAssets.exists(file))
+			exists = OpenFlAssets.exists(Paths.json(songName + '/events'));
 			#end
+			if (exists)
 			{
 				clearEvents();
 				var events:SwagSong = Song.loadFromJson('events', songName);

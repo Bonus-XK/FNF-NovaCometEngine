@@ -71,6 +71,50 @@ class ScriptingApi
 		Scripting.backToMainMenu();
 	}
 
+	// ===== 多语言 =====
+
+	/**
+	 * 取译文（缺 key 时回落 fallback）。
+	 * 语言表 = 引擎内置 + 玩家投放 + **启用模组的 mods/<mod>/languages/<code>.json**（只补充不覆盖）。
+	 * 模组侧 key 建议用自有命名空间（如 `tcm.xxx`），避免与引擎 key 冲突。
+	 */
+	@:keep
+	public function getLangText(key:String, fallback:String):String
+	{
+		return backend.Lang.tOr(key, fallback);
+	}
+
+	/** 当前生效的语言代码（zh / en / 模组投放的代码）。 */
+	@:keep
+	public function getLangCode():String
+	{
+		return backend.Lang.current;
+	}
+
+	/** 切换语言（与设置页同一入口；语言包缺失时回落默认语言，不抛异常）。返回实际生效代码。 */
+	@:keep
+	public function setLang(code:String):String
+	{
+		return backend.Lang.load(code);
+	}
+
+	/**
+	 * 注册语言变更监听（玩家切语言后回调，与 DesignTokens.addThemeListener 同一套模式）。
+	 * ⚠ 脚本界面销毁时必须用 offLangChanged 摘掉同一个函数引用，否则会回调到已销毁的界面。
+	 */
+	@:keep
+	public function onLangChanged(fn:Void->Void):Void
+	{
+		backend.Lang.addLangListener(fn);
+	}
+
+	/** 摘除语言变更监听。 */
+	@:keep
+	public function offLangChanged(fn:Void->Void):Void
+	{
+		backend.Lang.removeLangListener(fn);
+	}
+
 	// ===== 布局 =====
 
 	/**

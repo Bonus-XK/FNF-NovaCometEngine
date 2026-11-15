@@ -30,6 +30,6 @@
 
 - `tools/lime.ndll.stable`（compile-mac.sh 的对照基线）、`tools/lime.ndll.wallclock*`（构建活源）、`tools/lime.ndll.win64.wallclock`（无脚本引用，疑似 Windows 手动取用件，动前需确认）
 - `source/ex/`、`source/luagraph/`、`source/bridge/`、`source/cutscenes/`、`source/flxanimate/`、`source/flixel/` override、`source/openfl/display/FPS.hx` —— 全部确认在用
-- Vulkan 残留（Project.xml 的 `lime-vulkan` haxedef、`docs/VULKAN-ROADMAP.md`、`ci/vk-sandbox/`）：轨道已放弃，但涉及构建配置与既有文档，未动，待拍板
+- Vulkan 轨：2026-11-10 已整体删除（含 `Project.xml` 的 `lime-vulkan` haxedef）。`docs/VULKAN-ROADMAP.md` 与 `ci/vk-sandbox/` 仅作历史留档，不参与编译
 - `source/flixel/FlxGame.hx` 的 `#if FLX_RECORD` 块：对 flixel haxelib 的上游同步 override，保持与上游一致
 - `source/states/stages/objects/ABotSpeaker.hx` 的 `#if funkin.vis` 块：Project.xml 未挂 funkin-vis 库，块内代码从不编译（活文件里的死块，处理方式待议）

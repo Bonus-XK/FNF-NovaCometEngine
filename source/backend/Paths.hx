@@ -1369,6 +1369,40 @@ class Paths
 	}
 	#end
 
+	/**
+	 * 谱面文件路径解析（同时支持 .mec 二进制压缩谱面与原 .json）。
+	 *
+	 * 优先级：**位置优先，同一位置压缩优先**。
+	 *   ① 按 modCandidates 的既有模组覆盖顺序逐个位置检查，每个位置先看
+	 *      `<stem>.mec` 再看 `<stem>.json` —— 低优先级模组里的 .mec 不会
+	 *      越过高优先级模组里的 .json（否则会破坏模组覆盖语义）。
+	 *   ② 内置资源：文件系统（week/shared/preload）→ lime Assets。
+	 * 返回 null = 两个扩展名都不存在。
+	 *
+	 * 这是 resolveChartPath / events 判定的唯一入口，所有调用点共用同一口径。
+	 */
+	public static function chartPath(key:String):String
+	{
+		#if MODS_ALLOWED
+		for (p in modCandidates('data/' + key + '.json'))
+		{
+			var stem:String = p.substr(0, p.length - 5); // strip '.json'
+			var mec:String = stem + '.mec';
+			if (FileSystem.exists(mec)) return mec;
+			if (FileSystem.exists(p)) return p;
+		}
+		#end
+		var baseJson:String = json(key);
+		var baseMec:String = getPath('data/$key.mec', BINARY);
+		#if sys
+		if (FileSystem.exists(baseMec)) return baseMec;
+		if (FileSystem.exists(baseJson)) return baseJson;
+		#end
+		if (Assets.exists(baseMec)) return baseMec;
+		if (Assets.exists(baseJson, TEXT)) return baseJson;
+		return null;
+	}
+
 	#if flxanimate
 	/** Psych 0.7 兼容：FlxAnimate 加载（支持 mods 文件系统，走 loadAtlasEx 内容加载） */
 	public static function loadAnimateAtlas(spr:flxanimate.MeteoricFlxAnimate, folderOrImg:Dynamic, spriteJson:Dynamic = null, animationJson:Dynamic = null)

@@ -72,6 +72,33 @@ class Lang
 	private static var _zhCache:Map<String, String> = null;
 	private static var langListeners:Array<Void->Void> = [];
 
+	// ------------------------------------------------------------------ 模组语言包
+
+	/**
+	 * 启用模组的语言包目录（`mods/<mod>/languages`）。
+	 * 语言包合并（readLang）与可选语言扫描（refreshAvailable）共用这一个口径；
+	 * 启用顺序即优先级（先启用的模组先占坑）。
+	 */
+	private static function _modLangDirs():Array<String>
+	{
+		var out:Array<String> = [];
+		#if (sys && MODS_ALLOWED)
+		try
+		{
+			var enabled:Array<String> = Mods.parseList().enabled;
+			for (mod in enabled)
+			{
+				if (mod == null || mod.length == 0) continue;
+				var dir:String = Paths.mods(mod + '/languages');
+				if (dir != null && dir.length > 0
+					&& FileSystem.exists(dir) && FileSystem.isDirectory(dir)) out.push(dir);
+			}
+		}
+		catch (e:Dynamic) {}
+		#end
+		return out;
+	}
+
 	// ------------------------------------------------------------------ 生命周期
 
 	/** 语言变更监听（与 DesignTokens.addThemeListener 同一套模式）。
@@ -341,6 +368,24 @@ class Lang
 			}
 		}
 
+		// 启用模组目录内的语言包（mods/<mod>/languages/*.json）：
+		// 模组可投放全新语言（如 ja），同样不覆盖已扫到的语言
+		for (dir in _modLangDirs())
+		{
+			for (f in _listDir(dir))
+			{
+				if (f == null || f.length < 6 || f.substr(-5) != '.json') continue;
+				var code = f.substr(0, f.length - 5);
+				if (code.length == 0 || _byCode.exists(code)) continue;
+				var info = _makeInfo(code, dir + '/' + f, false);
+				if (info != null)
+				{
+					_infos.push(info);
+					_byCode.set(code, info);
+				}
+			}
+		}
+
 		// 非内置项按代码序（稳定排序，builtin 组内保持 zh → en 的插入顺序）
 		var userPart:Array<LangInfo> = [];
 		var builtinPart:Array<LangInfo> = [];
@@ -425,6 +470,25 @@ class Lang
 			var v:Dynamic = Reflect.field(j, field);
 			// 只接受字符串值；社区作者写错类型（数字/数组/嵌套对象）时跳过而不是崩
 			if (v != null && Std.isOfType(v, String)) out.set(field, cast v);
+		}
+
+		// 启用模组的语言包合并（mods/<mod>/languages/<code>.json）：
+		// 只**补充**缺失 key，绝不覆盖引擎/更早模组的 key —— 模组文案用自有命名空间
+		// （如 `tcm.*`），不污染引擎命名空间；先启用的模组先占坑，后面的不覆盖前面的。
+		for (mdir in _modLangDirs())
+		{
+			var mp:String = mdir + '/' + code + '.json';
+			var mraw:String = readLangRaw(mp);
+			if (mraw == null || mraw.length == 0) continue;
+			var mj:Dynamic = try Json.parse(mraw) catch (e:Dynamic) null;
+			if (mj == null) continue;
+			for (field in Reflect.fields(mj))
+			{
+				if (field == META_KEY) continue;
+				if (out.exists(field)) continue;
+				var mv:Dynamic = Reflect.field(mj, field);
+				if (mv != null && Std.isOfType(mv, String)) out.set(field, cast mv);
+			}
 		}
 
 		if (code == DEFAULT_LANG) _zhCache = out;

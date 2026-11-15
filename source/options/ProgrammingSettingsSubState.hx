@@ -117,7 +117,15 @@ class ProgrammingSettingsSubState extends BaseOptionsMenu
 			'bool');
 		addOption(option);
 
-		// ⚠ super() 必须在最后（见类头注释：changeSelection() 会读 optionsArray）
-		super();
+	// ===== JS 脚本（QuickJS）=====
+	// 默认关闭：关闭时不创建 JS 运行时、不扫描 .js，行为与落地前完全一致。
+	var option:Option = new Option('JS 脚本兼容',
+		'开启后加载 Psych 风格 scripts/ 目录下的 .js 脚本（QuickJS 运行时，真 JavaScript 语法）。\n脚本可收到 onCreate / onUpdate / onBeatHit / onStepHit / onDestroy 等回调，通过 setVar / getVar / console.log 与引擎交互。\n默认关闭；关闭时不创建 JS 运行时，零行为变化。',
+		'jsScriptingEnabled',
+		'bool');
+	addOption(option);
+
+	// ⚠ super() 必须在最后（见类头注释：changeSelection() 会读 optionsArray）
+	super();
 	}
 }

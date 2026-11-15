@@ -36,6 +36,7 @@ import scripting.lua.FunkinLua;
 @:access(backend.MusicBeatState)
 class NoteChartDomain
 {
+
 	/** 音符排序：纯函数（原 PlayState.sortHitNotes）。 */
 	public static function sortHitNotes(a:Note, b:Note):Int
 	{
@@ -480,12 +481,14 @@ class NoteChartDomain
 		{
 			if (ps.cachedEventsData == null)
 			{
-				var file:String = Paths.json(ps.songName + '/events');
-				#if MODS_ALLOWED
-				if (FileSystem.exists(Paths.modsJson(ps.songName + '/events')) || FileSystem.exists(file)) {
+				var exists:Bool;
+				#if sys
+				// .mec 事件文件与 .json 共用路径口径
+				exists = Paths.chartPath(ps.songName + '/events') != null;
 				#else
-				if (OpenFlAssets.exists(file)) {
+				exists = OpenFlAssets.exists(Paths.json(ps.songName + '/events'));
 				#end
+				if (exists) {
 			var _tEvd:Float = haxe.Timer.stamp() * 1000;
 					ps.cachedEventsData = Song.loadFromJson('events', ps.songName).events;
 			trace("[PLAY gcn] eventsDataLoad " + Std.int(haxe.Timer.stamp()*1000 - _tEvd) + "ms (count=" + (ps.cachedEventsData != null ? ps.cachedEventsData.length : -1) + ")");
@@ -493,6 +496,9 @@ class NoteChartDomain
 				else {
 					ps.cachedEventsData = [];
 				}
+				// 演出编排（DCE 兼容）：谱面同目录 cam.json（psych_cam_v1）事件并入事件流；
+				// 无 cam 文件 = 原样返回（零行为变化）
+				ps.cachedEventsData = backend.CameraEditorData.mergeIntoEventsData(ps.songName, ps.cachedEventsData);
 			}
 			var _tEvm:Float = haxe.Timer.stamp() * 1000;
 			for (event in ps.cachedEventsData) //Event Notes
@@ -829,6 +835,7 @@ class NoteChartDomain
 		ps.botHitQueue.resize(0);
 		ps.botBatchAnimDone = [false, false, false, false];
 		ps.botBatchSplashDone = [false, false, false, false];
+		for (bi in 0...ps.botBatchStrumDone.length) ps.botBatchStrumDone[bi] = false;
 		ps.botBatchHitsoundDone = false;
 		ps.botBatchScoreShown = false;
 	}
@@ -989,7 +996,8 @@ class NoteChartDomain
 
 		if(spr != null) {
 			spr.playAnim('confirm', true);
-			spr.resetAnim = time;
+			// 长条按住期间用较长复位时间；后续短命中不得把已有保持时间截短
+			spr.resetAnim = Math.max(spr.resetAnim, time);
 		}
 	}
 
@@ -1168,9 +1176,20 @@ class NoteChartDomain
 				var spr = ps.playerStrums.members[note.noteData];
 				if(spr != null && ClientPrefs.data.playerLightStrum) spr.playAnim('confirm', true);
 			}
-			else if (!(ps.botHitBatch && ps.botBatchAnimDone[note.noteData]) && ClientPrefs.data.botLightStrum)
-				// 自动游玩/回放：confirm 高亮带复位计时，避免判定后常亮
-				ps.strumPlayAnim(false, Std.int(Math.abs(note.noteData)), Conductor.stepCrochet * 1.25 / 1000 / ps.playbackRate);
+			else if (!(ps.botHitBatch && ps.botBatchStrumDone[note.noteData]) && ClientPrefs.data.botLightStrum)
+			{
+				// 自动游玩/回放：高亮节流必须与人物动画节流分开，否则人物动画先置
+				// botBatchAnimDone 会让本分支整批跳过（autoplay 命中判定线不亮）。
+				if (ps.botHitBatch) ps.botBatchStrumDone[note.noteData] = true;
+				var holdReset:Float = Conductor.stepCrochet * 1.25 / 1000 / ps.playbackRate;
+				// 长条：按头部剩余时长续住 confirm，避免只闪一下就回 static
+				if (note.isSustainNote && note.parent != null)
+				{
+					var remain:Float = (note.parent.strumTime + note.parent.sustainLength - Conductor.songPosition) / 1000 / ps.playbackRate;
+					if (remain > 0) holdReset += remain;
+				}
+				ps.strumPlayAnim(false, Std.int(Math.abs(note.noteData)), holdReset);
+			}
 			ps.vocals.volume = 1;
 
 			var isSus:Bool = note.isSustainNote; //GET OUT OF MY HEAD, GET OUT OF MY HEAD, GET OUT OF MY HEAD
@@ -1262,9 +1281,9 @@ class NoteChartDomain
 			if(result != FunkinLua.Function_Stop && result != FunkinLua.Function_StopHScript && result != FunkinLua.Function_StopAll) ps.callOnHScript('opponentNoteHit', [note]);
 		}
 
-		// 原生长条按压覆盖（模组 opponentNoteHit 回调同点触发，轨偏移 +4）
+		// 原生长条按压覆盖（模组 opponentNoteHit 回调同点触发，轨偏移 = 玩家轨数）
 		if (ps.holdCoverHandler != null && note.isSustainNote)
-			ps.holdCoverHandler.onHit(4 + Std.int(Math.abs(note.noteData)));
+			ps.holdCoverHandler.onHit(ExtraKeys.songKeys + Std.int(Math.abs(note.noteData)));
 
 		if (!note.isSustainNote)
 		{

@@ -484,6 +484,9 @@ class HScript
 		set('FlxColor', CustomFlxColor);
 		set('PlayState', PlayState);
 		set('Paths', Paths);
+		// 多语言口：脚本可直接 Lang.tOr(key, fallback) / Lang.current（随引擎语言/模组语言包）。
+		// 语言变更监听走 scripting.onLangChanged/offLangChanged（ScriptingApi 转发 Lang 监听表）。
+		set('Lang', backend.Lang);
 		set('Conductor', Conductor);
 		set('ClientPrefs', ClientPrefs);
 		set('Character', Character);

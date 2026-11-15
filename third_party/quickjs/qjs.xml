@@ -1,0 +1,27 @@
+<xml>
+
+    <!-- Vendored QuickJS 2024-01-13 (Bellard). Compiled into the hxcpp main target,
+         not into an ndll. Mirrors linc_luajit/git/linc/linc_lua.xml. -->
+    <files id='haxe'>
+        <compilerflag value='-I${QJS_PATH}'/>
+        <compilerflag value='-include${QJS_PATH}qjs_config.h'/>
+        <compilerflag value='-D_GNU_SOURCE=1'/>
+        <compilerflag value='-DCONFIG_BIGNUM=1'/>
+        <compilerflag value='-Wno-unused-function'/>
+        <file name='${QJS_PATH}qjs_glue.cpp'/>
+        <file name='${QJS_PATH}quickjs.c'/>
+        <file name='${QJS_PATH}libregexp.c'/>
+        <file name='${QJS_PATH}libunicode.c'/>
+        <file name='${QJS_PATH}cutils.c'/>
+        <file name='${QJS_PATH}libbf.c'/>
+    </files>
+
+    <files id='__main__'>
+        <compilerflag value='-I${QJS_PATH}'/>
+    </files>
+
+    <section id='vars'>
+        <set name='NO_PRECOMPILED_HEADERS' value='1'/>
+    </section>
+
+</xml>

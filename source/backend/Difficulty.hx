@@ -40,24 +40,23 @@ class Difficulty
 	{
 		if(week == null) week = WeekData.getCurrentWeek();
 
-		var diffStr:String = week.difficulties;
+		// week 可能为 null（storyWeek 越界）；difficulties 允许缺失/空串/全是逗号。
+		var diffStr:String = (week != null) ? week.difficulties : null;
+		var diffs:Array<String> = null;
 		if(diffStr != null && diffStr.length > 0)
 		{
-			var diffs:Array<String> = diffStr.trim().split(',');
-			var i:Int = diffs.length - 1;
-			while (i > 0)
+			diffs = [];
+			for (part in diffStr.trim().split(','))
 			{
-				if(diffs[i] != null)
-				{
-					diffs[i] = diffs[i].trim();
-					if(diffs[i].length < 1) diffs.remove(diffs[i]);
-				}
-				--i;
+				var p:String = (part == null) ? null : part.trim();
+				if(p != null && p.length > 0) diffs.push(p);
 			}
-
-			if(diffs.length > 0 && diffs[0].length > 0)
-				list = diffs;
 		}
+
+		// 解析为空时必须 resetList()：旧实现只在 `diffs[0].length > 0` 时赋值，
+		// 空串/全逗号会**沿用上一周目的列表**，67 难度周切回 3 难度周时尤其明显。
+		if(diffs != null && diffs.length > 0)
+			list = diffs;
 		else
 			resetList();
 
@@ -67,6 +66,11 @@ class Difficulty
 		//   导致 else 配对错位、**任何时候都执行 resetList()**，难度被重置成 Easy/Normal/Hard。
 		if (ClientPrefs.data.partsMode && list.indexOf(PARTS_DIFFICULTY) < 0)
 			list = list.copy().concat([PARTS_DIFFICULTY]);
+
+		// 全局难度索引不随列表自动收敛：从 67 难度的 weekSG 切回 3 难度周后
+		// storyDifficulty 可能仍是 66，getString() 越界 → UI 显示字面量 "null"。
+		if (PlayState.storyDifficulty < 0 || PlayState.storyDifficulty >= list.length)
+			PlayState.storyDifficulty = list.length - 1;
 	}
 
 	inline public static function resetList()
@@ -79,9 +83,21 @@ class Difficulty
 		list = diffs.copy();
 	}
 
+	/**
+	 * 难度名。越界 / 空元素一律兜底，**永不返回 null** —— 否则调用方用 `+` 拼接时
+	 * 会把 Haxe 的 null 变成界面上的字面量 "null"（HUD 水印、暂停页、结算页、
+	 * Story/Freeplay 难度文本都吃过这个亏，ChartingState 里甚至有专门的 null 补丁）。
+	 * 只有原本会返回 null 的路径行为改变，正常路径零变化。
+	 */
 	inline public static function getString(num:Null<Int> = null):String
 	{
-		return list[num == null ? PlayState.storyDifficulty : num];
+		var idx:Int = (num == null) ? PlayState.storyDifficulty : num;
+		if(list == null || list.length < 1) return defaultDifficulty;
+		if(idx < 0 || idx >= list.length) idx = 0;
+		var value:String = list[idx];
+		if(value == null || value.length < 1) value = list[0];
+		if(value == null || value.length < 1) return defaultDifficulty;
+		return value;
 	}
 
 	inline public static function getDefault():String

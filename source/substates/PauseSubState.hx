@@ -157,6 +157,10 @@ class PauseSubState extends MusicBeatSubstate
 
 	public static var songName:String = '';
 
+	// 已真正挂载的暂停循环音轨。FlxState 的 openSubState 是延迟到帧尾挂载的，
+	// 构造函数先 play 会让「同帧打开→关闭→再打开」被覆盖的旧实例永久失声控。
+	static var livePauseMusic:Array<FlxSound> = [];
+
 	public function new(x:Float, y:Float, ?pauseKeyHeld:Bool = false)
 	{
 		super();
@@ -186,26 +190,6 @@ class PauseSubState extends MusicBeatSubstate
 		// 预翻译会把「行为值」和「显示文案」绑死，切换语言后档位标签仍是旧语言。
 		for (i in 0...Difficulty.list.length) difficultyChoices.push(Difficulty.getString(i));
 		difficultyChoices.push(ID_BACK);
-
-		pauseMusic = new FlxSound();
-		// 暂停音乐资源缺失时绝不能阻止暂停界面打开（否则会出现“暂停界面显示不出来”但游戏已冻结）
-		try
-		{
-			if(songName != null) {
-				pauseMusic.loadEmbedded(Paths.music(songName), true, true);
-			} else if (songName != Lang.tOr('pause.musicNone', '无')) {
-				pauseMusic.loadEmbedded(Paths.music(Paths.formatToSongPath(ClientPrefs.data.pauseMusic)), true, true);
-			}
-			trace('[PAUSE] PauseSubState new: pauseMusic=' + songName);
-			pauseMusic.volume = 0;
-			pauseMusic.play(false, FlxG.random.int(0, Std.int(pauseMusic.length / 2)));
-			FlxG.sound.list.add(pauseMusic);
-		}
-		catch (e:Dynamic)
-		{
-			trace('[PAUSE] 暂停音乐加载失败，跳过：' + e);
-			pauseMusic = null;
-		}
 
 		// ---- 背景 ----
 		var bg:FlxSprite = new FlxSprite().makeGraphic(FlxG.width, FlxG.height, FlxColor.BLACK);
@@ -389,6 +373,65 @@ class PauseSubState extends MusicBeatSubstate
 		menuUI = [bg, titleText, chartingPanel, chartingText, menuPanel, sep, levelInfo, levelDifficulty,
 			blueballedTxt, practiceText, menuSelector, grpMenuShit,
 			backBtn.glow, backBtn.spr, backBtn.label];
+	}
+
+	override function create()
+	{
+		super.create();
+
+		// 只让真正显示的暂停页发声，并清掉上一轮快速切换可能留下的旧实例。
+		stopAllPauseMusic();
+		pauseMusic = new FlxSound();
+		// 暂停音乐资源缺失时绝不能阻止暂停界面打开（否则会出现“暂停界面显示不出来”但游戏已冻结）
+		try
+		{
+			if(songName != null) {
+				pauseMusic.loadEmbedded(Paths.music(songName), true, true);
+			} else if (songName != Lang.tOr('pause.musicNone', '无')) {
+				pauseMusic.loadEmbedded(Paths.music(Paths.formatToSongPath(ClientPrefs.data.pauseMusic)), true, true);
+			}
+			pauseMusic.volume = 0;
+			livePauseMusic.push(pauseMusic);
+			FlxG.sound.list.add(pauseMusic);
+			pauseMusic.play(false, FlxG.random.int(0, Std.int(pauseMusic.length / 2)));
+			trace('[PAUSE] loop attached: ' + songName + ' active=' + livePauseMusic.length);
+		}
+		catch (e:Dynamic)
+		{
+			trace('[PAUSE] 暂停音乐加载失败，跳过：' + e);
+			stopPauseMusic();
+		}
+	}
+
+	/** 模组暂停页也会调用：接管/关闭时清掉引擎侧遗留的循环音轨。 */
+	public static function stopAllPauseMusic():Void
+	{
+		var old = livePauseMusic;
+		livePauseMusic = [];
+		for (sound in old) destroyPauseSound(sound);
+	}
+
+	static function destroyPauseSound(sound:FlxSound):Void
+	{
+		if (sound == null) return;
+		sound.looped = false;
+		FlxG.sound.list.remove(sound, true);
+		sound.destroy(); // 非 inline：停止 OpenAL channel，并断开 SOUND_COMPLETE
+	}
+
+	function stopPauseMusic():Void
+	{
+		if (pauseMusic == null) return;
+		livePauseMusic.remove(pauseMusic);
+		destroyPauseSound(pauseMusic);
+		pauseMusic = null;
+	}
+
+	override public function close():Void
+	{
+		// FlxState 要到下一次 resetSubState 才 destroy；不能让它多响一帧，更不能等 GC。
+		stopPauseMusic();
+		super.close();
 	}
 
 	function setMenuUI(visible:Bool):Void
@@ -894,7 +937,7 @@ class PauseSubState extends MusicBeatSubstate
 		if (Lib.current.stage != null)
 			Lib.current.stage.removeEventListener(KeyboardEvent.KEY_UP, onPauseKeyUp);
 		FlxG.mouse.visible = false;
-		if (pauseMusic != null) pauseMusic.destroy();
+		stopPauseMusic();
 
 		super.destroy();
 	}
