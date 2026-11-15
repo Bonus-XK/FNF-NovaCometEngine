@@ -27,6 +27,7 @@ import backend.Song;
 import backend.Section;
 import backend.PackedChart;
 import backend.PerfProbe;
+import backend.LoadProbe;
 import backend.Rating;
 import backend.Replay;
 import backend.CrashHandler;
@@ -646,9 +647,13 @@ class PlayState extends MusicBeatState
 	/** 游玩中按返回键 / 左上角 X 后，在 update 末尾统一转成暂停（不退出游戏） */
 	private var androidBackQueued:Bool = false;
 
+	/** LoadProbe：首帧打点只做一次（结束加载时间线） */
+	private var _loadProbeFrameDone:Bool = false;
+
 	override public function create()
 	{
 		trace('[PLAY create] ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:create-entry');
 		// JS Engine 移植：GC 开关（true=允许 GC=系统默认；false=关闭 GC 消除尖峰，内存可能上升）
 		#if cpp
 		cpp.vm.Gc.enable(ClientPrefs.data.enableGC);
@@ -658,6 +663,7 @@ class PlayState extends MusicBeatState
 		// 下面的回放指纹/生成逻辑都依赖完整 DOM
 		reloadChartSourceIfNeeded();
 		trace('[PLAY create] reloadChart ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:chart-reload');
 
 		//trace('Playback Rate: ' + playbackRate);
 		// 进曲目即丢弃上一局的运行时音符图集缓存：其 FlxGraphic 随上次退出被内存清理销毁，
@@ -665,6 +671,7 @@ class PlayState extends MusicBeatState
 		objects.Note.clearRuntimeAtlasCache();
 		Paths.clearStoredMemory();
 		trace('[PLAY create] clearMem ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:clear-mem');
 
 		startCallback = startCountdown;
 		endCallback = endSong;
@@ -789,6 +796,7 @@ class PlayState extends MusicBeatState
 			stageData = StageData.dummy();
 		}
 		trace('[PLAY create] stageFile ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:stage-file');
 
 		defaultCamZoom = stageData.defaultZoom;
 
@@ -836,6 +844,7 @@ class PlayState extends MusicBeatState
 		gfGroup = new FlxSpriteGroup(GF_X, GF_Y);
 
 		PerfProbe.mark('stage: begin ' + curStage);
+		LoadProbe.mark('play:stage-begin ' + curStage + ' bgchars=' + showBgChars);
 		trace('[Stage] create stage: ' + curStage + ' | replayMode=' + replayMode + ' | isPixelStage=' + isPixelStage);
 
 		if (showBgChars)
@@ -857,6 +866,7 @@ class PlayState extends MusicBeatState
 		}
 		PerfProbe.mark('stage: constructed');
 		trace('[PLAY create] stageDone ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:stage-built');
 
 		if(isPixelStage) {
 			introSoundsSuffix = '-pixel';
@@ -907,6 +917,7 @@ class PlayState extends MusicBeatState
 		#end
 
 		trace('[PLAY create] globalScripts ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:global-scripts');
 
 		// TuoboLoad=2（极简）：跳过 gf 构造。
 		// 为什么必须单独处理 gf：showBgChars 只挡住了**舞台**构造
@@ -917,7 +928,7 @@ class PlayState extends MusicBeatState
 		// 都已有 `gf != null` 判断，跳过是安全的。
 		// dad / boyfriend 不跳：HUD 依赖它们的 healthIcon / healthColorArray
 		//（3331/3343/3438/3772），且两者合计仅 ~290ms，不是主要矛盾。
-		gfHidden = stageData.hide_girlfriend || ClientPrefs.tuoboLoadLevel() >= 2;
+		gfHidden = willSkipGirlfriend(stageData);
 		if (!gfHidden)
 		{
 			if(SONG.gfVersion == null || SONG.gfVersion.length < 1) SONG.gfVersion = 'gf'; //Fix for the Chart Editor
@@ -929,6 +940,7 @@ class PlayState extends MusicBeatState
 			gfMap.set(SONG.gfVersion, gf); // 快速重开恢复默认角色用
 			startCharacterScripts(gf.curCharacter);
 			trace('[PLAY create] gfDone ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+			LoadProbe.mark('play:gf');
 		}
 
 		// 联机角色选择：本端映射（我=BF，对方=Dad）——双端均为标准单机布局：
@@ -939,6 +951,7 @@ class PlayState extends MusicBeatState
 		dadMap.set(SONG.player2, dad); // 快速重开恢复默认角色用
 		startCharacterScripts(dad.curCharacter);
 		trace('[PLAY create] dadDone ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:dad');
 
 		boyfriend = new Character(0, 0, SONG.player1, true);
 		startCharacterPos(boyfriend);
@@ -946,6 +959,7 @@ class PlayState extends MusicBeatState
 		boyfriendMap.set(SONG.player1, boyfriend); // 快速重开恢复默认角色用
 		startCharacterScripts(boyfriend.curCharacter);
 		trace('[PLAY create] bfDone ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:bf');
 
 		// JS Engine 移植：只显示 HUD——角色组整组不可见（含子级角色，渲染裁剪在组层完成；
 		// 角色对象保留，脚本/血条颜色/相机跟随不受影响）
@@ -961,12 +975,14 @@ class PlayState extends MusicBeatState
 		setOnScripts('boyfriend', boyfriend);
 		setOnScripts('gf', gf);
 		setOnScripts('camGame', camGame);
+		LoadProbe.mark('play:script-refs');
 
 		// Meteoric 资源同名脚本：角色（scripting/characters/<curCharacter>.hx）。
 		// 必须在 dad/boyfriend/gf 字段赋值后加载，脚本的 onCreate 才能拿到完整引用。
 		#if (MODS_ALLOWED && HSCRIPT_ALLOWED && sys)
 		scripting.ResourceScripts.loadCharacters(this);
 		#end
+		LoadProbe.mark('play:char-scripts');
 
 		// STAGE SCRIPTS（在角色创建后加载，使 onCreate 可访问 dad/boyfriend/gf）
 		// JS Engine 移植：只显示 HUD 时跳过舞台脚本（舞台已不渲染，脚本多为视觉/相机效果）
@@ -984,6 +1000,7 @@ class PlayState extends MusicBeatState
 			scripting.ResourceScripts.loadStage(this, curStage);
 		#end
 		}
+		LoadProbe.mark('play:stage-scripts');
 
 		var camPos:FlxPoint = FlxPoint.get(girlfriendCameraOffset[0], girlfriendCameraOffset[1]);
 		if(gf != null)
@@ -1013,6 +1030,7 @@ class PlayState extends MusicBeatState
 		var splash:NoteSplash = new NoteSplash(100, 100);
 		grpNoteSplashes.add(splash);
 		splash.alpha = 0.000001; //cant make it invisible or it won't allow precaching
+		LoadProbe.mark('play:splash');
 
 		opponentStrums = new FlxTypedGroup<StrumNote>();
 		playerStrums = new FlxTypedGroup<StrumNote>();
@@ -1049,6 +1067,7 @@ class PlayState extends MusicBeatState
 		stagesFunc(function(stage:BaseStage) stage.createPost());
 		PerfProbe.mark('after createPost');
 		trace('[PLAY create] createPost ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:createPost');
 
 		moveCameraSection();
 		PerfProbe.mark('after moveCameraSection');
@@ -1059,6 +1078,7 @@ class PlayState extends MusicBeatState
 		hud.build();
 		PerfProbe.mark('after GameHUD.build');
 		trace('[PLAY create] hudBuild ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:hud');
 		// 小图标跳动：清空上一局的每帧状态（hop 位移 / squash 相位 / 交替奇偶 / 上一档位），
 		// 必须在 hud.build() 之后、第一次 GameHUD.update 之前 —— 否则重进曲目会带着旧位移起跳。
 		IconBop.reset();
@@ -1178,7 +1198,9 @@ class PlayState extends MusicBeatState
 		#end
 
 		trace('[PLAY create] end ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:create-end');
 		startCallback();
+		LoadProbe.mark('play:countdown-call-done');
 		RecalculateRating();
 
 		//PRECACHING MISS SOUNDS BECAUSE I THINK THEY CAN LAG PEOPLE AND FUCK THEM UP IDK HOW HAXE WORKS
@@ -1413,6 +1435,7 @@ class PlayState extends MusicBeatState
 				generateStaticArrows(1);
 			}
 			keepStrumsOnRestart = false;
+			LoadProbe.mark('countdown:arrows-done');
 			CrashHandler.mark('countdown:arrows-done');
 			// 模表渲染器在判定线生成后捕获/刷新基准位（首帧 draw 前必须就绪；多 K 键数在此才实测）
 			if (playfieldRenderer != null)
@@ -1438,6 +1461,7 @@ class PlayState extends MusicBeatState
 			}
 
 			startedCountdown = true;
+			LoadProbe.mark('countdown:strums-bound');
 			Conductor.setPosition(-Conductor.crochet * 5);
 			CrashHandler.mark('countdown:timer-armed');
 			setOnScripts('startedCountdown', true);
@@ -1604,6 +1628,7 @@ class PlayState extends MusicBeatState
 
 		vocals = new FlxSound();
 		opponentVocals = new FlxSound();
+		LoadProbe.mark('play:audio-begin');
 		try
 		{
 			// 【Obsolescence-spam 关键修复】谱面目录名（chartFolder）与 JSON 的 song 字段
@@ -1699,14 +1724,17 @@ class PlayState extends MusicBeatState
 		FlxG.sound.list.add(opponentVocals);
 		FlxG.sound.list.add(inst);
 		trace('[PLAY create] audioLoaded ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:audio-loaded');
 
 		notes = new NoteGroup();
 		add(notes);
+		LoadProbe.mark('play:notes-begin');
 		generateChartNotes(true);
 		// 模表：显式开启且谱面自带 modchart.json 才创建渲染器（默认关=零行为变化）
 		if (ClientPrefs.data.modchartsEnabled && modcharting.ModchartFile.existsForSong(SONG.song))
 			initModchartRenderer();
 		trace('[PLAY create] chartNotes ' + Std.int(haxe.Timer.stamp()*1000) + 'ms');
+		LoadProbe.mark('play:chart-notes-done');
 	}
 
 	// 根据内存中的谱面数据生成音符与事件。
@@ -1727,6 +1755,28 @@ class PlayState extends MusicBeatState
 	// 长条重构（Meteoric Fix 续）：段 chartSeq 基址 = 箭头总数。
 	// 与旧分配 100% 一致（箭头 0..N-1，段 N..按谱面顺序），旧回放兼容。
 	static var _segmentSeqBase:Int = 0;
+
+	/**
+	 * 本曲是否**不会**实例化 gf。
+	 *
+	 * 单一真源：create 里的 gfHidden 与 LoadingState 的 gf 图集预载都读这里，
+	 * 两处判定一旦漂移，就会出现「预载了 192MB 图集却没人消费」的纯浪费
+	 *（实测 tcm sadness：gf 隐藏时 GF_assets.png 8000x6000 白解码 498ms + 192MB 常驻）。
+	 */
+	public static function willSkipGirlfriend(?stageData:StageFile):Bool
+	{
+		if (ClientPrefs.tuoboLoadLevel() >= 2) return true;
+		if (SONG == null) return false;
+		var sd:StageFile = stageData;
+		if (sd == null)
+		{
+			var stageName:String = SONG.stage;
+			if (stageName == null || stageName.length < 1)
+				stageName = StageData.vanillaSongStage(Paths.formatToSongPath(SONG.song));
+			sd = StageData.getStageFile(stageName);
+		}
+		return sd != null && sd.hide_girlfriend;
+	}
 
 	// 加载界面空闲期调用：构建整张谱面的音符对象（含长条段），返回是否成功。
 	// 与 create 期生成完全同一套参数（stageUI / BPM / songSpeed / playbackRate），失败时回退创建期生成。
@@ -2548,6 +2598,13 @@ class PlayState extends MusicBeatState
 
 	override public function update(elapsed:Float)
 	{
+		// 加载时间线收尾：create 后的第一帧（含首次绘制提交）—— 这才是玩家感知的"加载结束"
+		if (!_loadProbeFrameDone)
+		{
+			_loadProbeFrameDone = true;
+			LoadProbe.mark('play:frame-1');
+			LoadProbe.end();
+		}
 		// 大纹理 CPU 副本的周期性兜底释放（默认关闭时 no-op）
 		backend.GfxPolicy.onPlayUpdate(elapsed);
 		HostDomain.update(this, elapsed);

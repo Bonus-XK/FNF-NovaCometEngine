@@ -21,6 +21,7 @@ import lime.utils.AssetLibrary;
 import lime.utils.AssetManifest;
 
 import backend.CrashHandler;
+import backend.LoadProbe;
 import backend.StageData;
 import backend.Song;
 
@@ -101,6 +102,7 @@ class LoadingState extends MusicBeatState
 	var _lastDotsCount:Int = -1;
 	var _lastChartLoaded:Bool = false;
 	var _lastPercentShown:Int = -1;
+	var _probeFrame1:Bool = false;
 
 	function new(target:FlxState, stopMusic:Bool, directory:String)
 	{
@@ -113,6 +115,7 @@ class LoadingState extends MusicBeatState
 	override function create()
 	{
 		trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] create start');
+		LoadProbe.mark('loading:create');
 		// 加载界面不调用 MusicBeatState.create()，这里单独清理（先清理再加载，避免误删）
 		Paths.clearStoredMemory();
 		Paths.clearUnusedMemory(false); // 加载途中不做 System.gc()，避免卡住主线程
@@ -197,6 +200,7 @@ class LoadingState extends MusicBeatState
 		#end
 
 		// ---- 进场黑幕：从全黑淡出浮现加载界面 ----
+		LoadProbe.mark('loading:ui-done');
 		// 与 Freeplay 出场的整屏压黑衔接（startFreeplayOut 尾部 camera.fade 0.16s 压到全黑后切屏）：
 		// 之前本界面瞬现，色块跳变。放在 add 顺序最末 = 覆盖所有元素的最上层。
 		// 加载完成进 PlayState 的瞬切是既有优化（加载完立即进入目标状态），刻意不动。
@@ -210,6 +214,7 @@ class LoadingState extends MusicBeatState
 	function startLoading()
 	{
 		trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] startLoading');
+		LoadProbe.mark('loading:startLoading');
 		callbacks = new MultiCallback(onLoad);
 		introComplete = callbacks.add("introComplete");
 
@@ -232,6 +237,7 @@ class LoadingState extends MusicBeatState
 				try
 				{
 					trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] chartParseStart');
+					LoadProbe.mark('chart:parse-begin');
 					CrashHandler.mark('LoadingState:chart-parse');
 					// 组合谱（多 Part 叠加）走 loadCombo：命中磁盘打包缓存时
 					// 79GB 原始数据 → 几十 MB 簇缓存，秒开；未命中/非组合谱退 loadFromFile
@@ -239,6 +245,7 @@ class LoadingState extends MusicBeatState
 					chartMessage = (_combo != null) ? _combo : Song.loadFromFile(_syncChartPath, pendingChartJson == 'events');
 					CrashHandler.mark('LoadingState:chart-loaded');
 					trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] chartParseDone');
+					LoadProbe.mark('chart:parse-done notes=' + (chartMessage != null && chartMessage.notes != null ? chartMessage.notes.length : -1));
 					onChartLoaded();
 				}
 				catch(e:Dynamic)
@@ -262,11 +269,13 @@ class LoadingState extends MusicBeatState
 				try
 				{
 					trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] chartParseStart');
+					LoadProbe.mark('chart:parse-begin');
 					CrashHandler.mark('LoadingState:chart-parse');
 					var _combo:SwagSong = Song.loadCombo(pendingChartJson, pendingChartFolder);
 					chartMessage = (_combo != null) ? _combo : Song.loadFromFile(filePath, pendingChartJson == 'events');
 					CrashHandler.mark('LoadingState:chart-loaded');
 					trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] chartParseDone');
+					LoadProbe.mark('chart:parse-done notes=' + (chartMessage != null && chartMessage.notes != null ? chartMessage.notes.length : -1));
 					onChartLoaded();
 				}
 				catch(e:Dynamic)
@@ -417,10 +426,16 @@ class LoadingState extends MusicBeatState
 		if (!FileSystem.exists(file)) return;
 
 		audioPreloads.set(file, true);
+		var probeOn:Bool = LoadProbe.enabled();
+		var probeT0:Float = probeOn ? haxe.Timer.stamp() : 0;
 		try
 		{
 			// 歌曲音频走流式（Vorbis+OpenAL 环形缓冲，不驻留整首 PCM，省 20-40MB/首）
 			var snd:Sound = Paths.streamSongAudio(file);
+			if (probeOn)
+				LoadProbe.mark('audio:decode ' + haxe.io.Path.withoutDirectory(file)
+					+ ' took=' + Std.int((haxe.Timer.stamp() - probeT0) * 1000) + 'ms'
+					+ ' len=' + (snd != null ? Std.int(snd.length * 1000) + 'ms' : "null"));
 			audioStreamComplete({file: file, sound: snd});
 		}
 		catch(e:Dynamic)
@@ -742,6 +757,7 @@ class LoadingState extends MusicBeatState
 	function onChartLoaded()
 	{
 		trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] onChartLoaded');
+		LoadProbe.mark('chart:onLoaded');
 		PlayState.setSong(chartMessage);
 		// 登记谱面身份：PlayState 游玩期会剥离 SONG.notes（省内存），重开/编谱靠此从缓存恢复
 		PlayState.registerChartSource(pendingChartJson, pendingChartFolder, chartMessage.song);
@@ -763,8 +779,10 @@ class LoadingState extends MusicBeatState
 
 		#if sys
 		trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] charPreloadStart');
+		LoadProbe.mark('charpreload:begin');
 		startCharPreload();
 		trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] charPreloadDone');
+		LoadProbe.mark('charpreload:queued');
 		#end
 
 		// 提前生成（先）：构建整张谱面的 CastNote + noteTypes + botplay 计划（一次遍历完成）——
@@ -777,7 +795,9 @@ class LoadingState extends MusicBeatState
 		{
 			var cb:Void->Void = callbacks != null ? callbacks.add('prerender') : null;
 			whenSharedReady(function() {
+				LoadProbe.mark('prerender:begin');
 				Note.preRenderChartNotes(PlayState.getPreGenNoteTypes());
+				LoadProbe.mark('prerender:done');
 				if (cb != null) cb();
 			});
 		}
@@ -795,7 +815,12 @@ class LoadingState extends MusicBeatState
 			cb();
 			return;
 		}
-		Assets.loadLibrary('shared').onComplete(function(_) { cb(); });
+		LoadProbe.mark('shared:wait-begin');
+		Assets.loadLibrary('shared').onComplete(function(_)
+		{
+			LoadProbe.mark('shared:wait-done');
+			cb();
+		});
 	}
 
 	// 加载空闲期预生成音符（同步执行，进度计入加载条；失败自动回退创建期生成）
@@ -803,13 +828,17 @@ class LoadingState extends MusicBeatState
 	{
 		var cb:Void->Void = callbacks != null ? callbacks.add('pregen') : null;
 		trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] preGenStart');
+		LoadProbe.mark('pregen:begin');
 		PlayState.preGenerateChart();
 		trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] preGenDone');
+		LoadProbe.mark('pregen:done');
 		if (cb != null) cb();
 	}
 
 	function onChartLoadFailed()
 	{
+		LoadProbe.mark('chart:load-failed ' + Std.string(chartError));
+		LoadProbe.end();
 		clearPendingChart();
 		loadFailed = true;
 		errorText.text = Lang.tOr('loading.chartFailedPrefix', '谱面加载失败：\n') + chartError;
@@ -835,8 +864,10 @@ class LoadingState extends MusicBeatState
 
 			var callback = callbacks.add("library:" + library);
 			trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] libLoadStart ' + library);
+			LoadProbe.mark('lib:begin ' + library);
 			Assets.loadLibrary(library).onComplete(function (_) {
 				trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] libLoadDone ' + library);
+				LoadProbe.mark('lib:done ' + library);
 				callback();
 			});
 		}
@@ -844,6 +875,11 @@ class LoadingState extends MusicBeatState
 	
 	override function update(elapsed:Float)
 	{
+		if (!_probeFrame1)
+		{
+			_probeFrame1 = true;
+			LoadProbe.mark('loading:frame1-update');
+		}
 		super.update(elapsed);
 
 		#if (sys && !desktop)
@@ -932,6 +968,7 @@ class LoadingState extends MusicBeatState
 	function onLoad()
 	{
 		trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] onLoad');
+		LoadProbe.mark('loading:onLoad');
 		#if sys
 		charPreloads = [];
 		charPreloadCallbacks = [];
@@ -999,6 +1036,9 @@ class LoadingState extends MusicBeatState
 		pendingChartJson = jsonInput;
 		pendingChartFolder = folder;
 		pendingReturnState = returnState;
+
+		// 加载时间线从这里起算（Freeplay 选歌确认 / Story / 测试直跳都经本函数）
+		LoadProbe.begin('song=' + jsonInput);
 
 		#if sys
 		// 提前并行启动谱面解析与音频解码（与切场景同一帧开始，加载界面只需等待收尾）

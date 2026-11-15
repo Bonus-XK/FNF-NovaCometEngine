@@ -449,7 +449,14 @@ class Song
 		// 避免重复读盘 + JSON 解析（42MB / 226 万音符级谱面，重复解析还会让后台线程长时间
 		// 活过 LoadingState 生命周期，是"退出重进同曲闪退"的间接诱因）；语义与 loadFromJson 缓存命中一致
 		var cachedHit:SwagSong = getCachedChart(chartCacheKey(filePath));
-		if (cachedHit != null) return copySong(cachedHit);
+		if (cachedHit != null)
+		{
+			LoadProbe.mark('chart:cache-hit');
+			var _tCopy:Float = haxe.Timer.stamp();
+			var _c:SwagSong = copySong(cachedHit);
+			LoadProbe.mark('chart:cache-copy took=' + Std.int((haxe.Timer.stamp() - _tCopy) * 1000) + 'ms');
+			return _c;
+		}
 
 		var isPacked:Bool = ChartCodec.isPackedPath(filePath);
 		// .mec 用解压后的原始大小判定大谱面（压缩后文件可能只有 1/10）
@@ -475,7 +482,9 @@ class Song
 			if (packedDisabled) trace('[PACKEDCHART] disabled by METEORIC_NO_PACKED');
 			if (sz >= STREAM_CHART_MIN && !packedDisabled)
 			{
+				LoadProbe.mark('chart:packed-begin');
 				var packedSong:SwagSong = loadPackedChart(filePath);
+				LoadProbe.mark('chart:packed-done');
 				if (packedSong != null) return packedSong;
 			}
 		}
@@ -485,6 +494,7 @@ class Song
 		}
 		#end
 
+		LoadProbe.mark('chart:read-begin size=' + logicalSize);
 		var rawJson = null;
 		if (isPacked)
 		{
@@ -507,6 +517,8 @@ class Song
 			#end
 		}
 
+		LoadProbe.mark('chart:read-done len=' + (rawJson != null ? rawJson.length : -1));
+
 		while (!rawJson.endsWith("}"))
 		{
 			rawJson = rawJson.substr(0, rawJson.length - 1);
@@ -514,7 +526,9 @@ class Song
 		}
 
 
+		LoadProbe.mark('chart:parse-begin');
 		var songJson:Dynamic = parseJSONshit(rawJson);
+		LoadProbe.mark('chart:parsed');
 		onLoadJson(songJson);
 
 		// Psych 1.0.4 谱面格式：format 为 psych_v1 的谱面列号已是绝对方向（<4 玩家 / >=4 对手），
@@ -525,6 +539,9 @@ class Song
 		{
 			songJson.format = 'psych_v1_convert';
 			convertToPsychV1(songJson);
+			LoadProbe.mark('chart:converted');
+		} else {
+			LoadProbe.mark('chart:fmt-native');
 		}
 
 		// 后台线程解析完成后也写入缓存（纯数据深拷贝），下次再选同一首谱面直接命中、不再解析
@@ -532,7 +549,13 @@ class Song
 		// 会让完整 DOM 反复常驻，1GB 目标失效。大谱面重开直接走本函数快速重解析（约 1~2s）。
 		var isLargeChart:Bool = logicalSize >= CHART_DOM_KEEP_MAX;
 		if (!isLargeChart)
+		{
+			var _tCache:Float = haxe.Timer.stamp();
 			cacheChart(chartCacheKey(filePath), copySong(songJson));
+			LoadProbe.mark('chart:cache-store took=' + Std.int((haxe.Timer.stamp() - _tCache) * 1000) + 'ms');
+		}
+		else
+			LoadProbe.mark('chart:cache-skip large');
 		return songJson;
 	}
 

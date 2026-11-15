@@ -4,6 +4,7 @@ import backend.Lang;
 import backend.WeekData;
 import backend.Highscore;
 import backend.Song;
+import backend.LoadProbe;
 
 import flixel.util.FlxSpriteUtil;
 import flixel.system.ui.FlxSoundTray;
@@ -748,6 +749,7 @@ class FreeplayState extends MusicBeatState
 
 		if (accepted)
 		{
+			LoadProbe.mark('freeplay:accept');
 			persistentUpdate = false;
 			var songLowercase:String = Paths.formatToSongPath(songs[curSelected].songName);
 			var poop:String = Highscore.formatSong(songLowercase, curDifficulty);
@@ -786,12 +788,14 @@ class FreeplayState extends MusicBeatState
 			LoadingState.pendingChartFolder = songLowercase;
 			LoadingState.pendingReturnState = new FreeplayState();
 			LoadingState.startChartPreload();
+			LoadProbe.mark('freeplay:out-start');
 
 			// Freeplay 元素向四周飞出，紧接着加载界面
 			startFreeplayOut();
 			// 0.28→0.16：与 tween 时长对齐（0.15s + 一帧余量），不再额外空等 120ms
 			new FlxTimer().start(0.16, function(_)
 			{
+				LoadProbe.mark('freeplay:switch');
 				if(!LoadingState.loadSongAndSwitchState(new PlayState(), songLowercase, poop, songLowercase, true, new FreeplayState()))
 				{
 					// 切换失败：出场 fade 已把整屏压黑，先反向淡出恢复可见，再显示错误提示

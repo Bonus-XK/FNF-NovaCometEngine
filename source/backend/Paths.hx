@@ -262,6 +262,9 @@ class Paths
 			fireImageDecodeWaiters(file);
 			trace('[IMG+' + Std.int(_t0 * 1000) + '] decode ' + Std.int((haxe.Timer.stamp() - _t0) * 1000) + 'ms '
 				+ (bmpSize(file)) + ' -> ' + imageDecodeQueue.length + ' left');
+			LoadProbe.mark('img:decode ' + haxe.io.Path.withoutDirectory(file)
+				+ ' took=' + Std.int((haxe.Timer.stamp() - _t0) * 1000) + 'ms ' + bmpSize(file)
+				+ ' left=' + imageDecodeQueue.length);
 			n++;
 		}
 	}
@@ -602,6 +605,7 @@ class Paths
 
 		var bitmap:BitmapData = null;
 		var file:String = null;
+		var pendingHit:Bool = false;
 
 		#if MODS_ALLOWED
 		file = modsImages(key);
@@ -621,6 +625,7 @@ class Paths
 		{
 			bitmap = pendingBitmaps.get(file);
 			pendingBitmaps.remove(file);
+			pendingHit = true;
 		}
 		else if (FileSystem.exists(file))
 			bitmap = BitmapData.fromFile(file);
@@ -642,6 +647,7 @@ class Paths
 			{
 				bitmap = pendingBitmaps.get(file);
 				pendingBitmaps.remove(file);
+				pendingHit = true;
 			}
 			else if (OpenFlAssets.exists(file, IMAGE))
 				bitmap = OpenFlAssets.getBitmapData(file);
@@ -661,6 +667,8 @@ class Paths
 
 		if (bitmap != null)
 		{
+			if (LoadProbe.active()) LoadProbe.mark('img:resolved ' + key + ' ' + bitmap.width + 'x' + bitmap.height
+				+ ' from=' + (pendingHit ? "pending" : "disk/cache"));
 			if (!localTrackedAssets.contains(file)) localTrackedAssets.push(file); // 去重
 			// 图集降采样（Meteoric Fix 续）：>2048px 大图缩到 ClientPrefs.data.textureScale（桌面默认 50%）。
 			// 各图集消费者（flxanimate 2020 spritemap / sparrow XML）同步缩放帧坐标；旧格式
@@ -840,17 +848,23 @@ class Paths
 	static public function getAtlas(key:String, ?library:String = null):FlxAtlasFrames
 	{
 		var useMod:Bool = false;
+		var probe:Bool = LoadProbe.active();
+		var tA:Float = probe ? haxe.Timer.stamp() : 0;
 		// allowPack=false：图集加载器绝不参与运行时密排列（帧坐标基于原图，打包会破坏 UV/空指针）
 		var imageLoaded:FlxGraphic = image(key, library, true, true, -1, false);
+		if (probe) LoadProbe.mark('atlas:image ' + key + ' took=' + Std.int((haxe.Timer.stamp() - tA) * 1000)
+			+ 'ms ' + (imageLoaded != null && imageLoaded.bitmap != null ? imageLoaded.bitmap.width + 'x' + imageLoaded.bitmap.height : "null"));
 
 		var myXml:Dynamic = getPath('images/$key.xml', TEXT, library, true);
 		if(OpenFlAssets.exists(myXml) #if MODS_ALLOWED || (FileSystem.exists(myXml) && (useMod = true)) #end )
 		{
-			#if MODS_ALLOWED
-			return FlxAtlasFrames.fromSparrow(imageLoaded, (useMod ? File.getContent(myXml) : atlasData(myXml)));
-			#else
-			return FlxAtlasFrames.fromSparrow(imageLoaded, atlasData(myXml));
-			#end
+			var _xmlText:String = (useMod ? File.getContent(myXml) : atlasData(myXml));
+			if (probe) LoadProbe.mark('atlas:xml ' + key + ' len=' + (_xmlText != null ? _xmlText.length : -1)
+				+ ' took=' + Std.int((haxe.Timer.stamp() - tA) * 1000) + 'ms');
+			var _fr:FlxAtlasFrames = FlxAtlasFrames.fromSparrow(imageLoaded, _xmlText);
+			if (probe) LoadProbe.mark('atlas:parsed ' + key + ' frames=' + (_fr != null ? _fr.frames.length : -1)
+				+ ' took=' + Std.int((haxe.Timer.stamp() - tA) * 1000) + 'ms');
+			return _fr;
 		}
 		else
 		{

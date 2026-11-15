@@ -94,6 +94,10 @@ class Character extends FlxSprite
 	{
 		super(x, y);
 
+		// 加载时间线：单个角色的构造（JSON + 图集解码 + 动画注册）耗时
+		var _probeOn:Bool = backend.LoadProbe.enabled();
+		var _probeT0:Float = _probeOn ? haxe.Timer.stamp() : 0;
+
 		animOffsets = new Map<String, Array<Dynamic>>();
 		curCharacter = character;
 		this.isPlayer = isPlayer;
@@ -130,6 +134,8 @@ class Character extends FlxSprite
 				#end
 
 				var json:CharacterFile = cast Json.parse(rawJson);
+				if (_probeOn) backend.LoadProbe.mark('char:json ' + curCharacter
+					+ ' took=' + Std.int((haxe.Timer.stamp() - _probeT0) * 1000) + 'ms');
 				var useAtlas:Bool = false;
 
 				#if MODS_ALLOWED
@@ -179,6 +185,8 @@ class Character extends FlxSprite
 				else
 					frames = AtlasFrameMaker.construct(json.image);
 
+				if (_probeOn) backend.LoadProbe.mark('char:frames ' + curCharacter
+					+ ' took=' + Std.int((haxe.Timer.stamp() - _probeT0) * 1000) + 'ms total');
 				imageFile = json.image;
 				vocalsFile = json.vocals_file != null ? json.vocals_file : '';
 				if(json.scale != 1) {
@@ -238,6 +246,9 @@ class Character extends FlxSprite
 				} else {
 					quickAnimAdd('idle', 'BF idle dance');
 				}
+				if (_probeOn) backend.LoadProbe.mark('char:anims ' + curCharacter
+					+ ' anims=' + (animationsArray != null ? animationsArray.length : 0)
+					+ ' took=' + Std.int((haxe.Timer.stamp() - _probeT0) * 1000) + 'ms total');
 				#if flxanimate
 				if(isAnimateAtlas) copyAtlasValues();
 				#end
@@ -281,6 +292,10 @@ class Character extends FlxSprite
 				loadMappedAnims();
 				playAnim("shoot1");
 		}
+
+		if (_probeOn)
+			backend.LoadProbe.mark('char:built ' + curCharacter
+				+ ' took=' + Std.int((haxe.Timer.stamp() - _probeT0) * 1000) + 'ms');
 	}
 
 	#if flxanimate
