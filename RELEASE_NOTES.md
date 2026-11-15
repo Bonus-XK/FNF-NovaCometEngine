@@ -1,29 +1,26 @@
-# NovaComet Engine v1.2.0 Pre-release 2 — "mooncat"
+# NovaComet Engine v1.2.0 Pre-release 3 — "crazymidnight"
 
-> 基于 Psych Engine 0.7.1h 深度魔改的 FNF 引擎。**v1.2.0 Pre-release 2（代号 mooncat）** 在 Pre-release 1（bigshot）基础上：游玩界面 HUD 全面重设计（多档样式）、内置打击音效、移动端返回键与内存优化、CRT 等根级滤镜的宽屏适配修复，以及 Psych 0.6.3 / 0.7.3 兼容接线与模组管理页增强。
+> 基于 Psych Engine 0.7.1h 深度魔改的 FNF 引擎。**v1.2.0 Pre-release 3（代号 crazymidnight）** 汇总 Pre-release 2（mooncat，`v1.2.0-20261108-1710`）以来的全部更新：模组谱面压缩 `.mec`、模表（Modchart）运行时与编舞编辑器、JS 脚本层、TCM 真舞台、四代 Psych 模组兼容接线，以及一批游玩/存档/性能与判定线高亮修复。
 
 ---
 
 ## ✨ 版本亮点
 
-- **游玩界面 HUD 重设计**（全部默认经典/关，零行为变化）：
-  - 计分栏样式：经典单行 / **流星三段簇**（主行大号分数 + 次行 Miss·准度·FC，Miss 整行染红；簇内容可跟随 Score 格式串）
-  - 血条样式四档：经典贴图 / 0.6.3 旧版 / 新版自绘 / **流星圆角**；旧「旧版/新版血条」开关自动镜像迁移
-  - 时间数字内嵌时间条右端；左下角水印两行化 + 减淡开关；血量图标静态软投影；AutoPlay/REPLAY 圆角胶囊徽标
-- **内置打击音效**：自带音色包，音量条新增 HITS 行（可拖动），Shift + +/- 快捷调节，音符默认档自动换玩家自定义音
-- **移动端**：系统返回键 / 虚拟 X 不再退出游戏（统一返回上一级，游玩中=暂停菜单）；音频流式播放开关 + 事件角色巨图预载跳过（老手机内存不足闪退的主要削减项）
-- **FPS 计数器**：内存 / 峰值 / CPU 实时行（窗口标题或屏内副行）
-- **模组管理页**：模组引擎版本手动匹配 + 自动识别开关（默认关）
-- **Psych 兼容接线**（默认关）：Psych 0.6.3 Lua 兼容（luaUse063Compat）；Psych 0.7.3 脚本 API 与五个 Pre 系回调（psychV073Compat）
+- **模组谱面压缩 `.mec`**：64B 头（MEC1 / version / flags / 尺寸 / crc32 / blockSize）+ 原 JSON 前 8192B 未压缩预览；三 codec 全部字节级无损（deflate 单流 / LZMA 16MB 分块 / struct 列式 LZMA1 帧 + 原字节字典重建元组）。同一 648.9MiB 粪谱实测：deflate L9 10.8MiB → LZMA 6.85MiB → **struct 857.4KiB（739×）**。CLI `tools/chartpack/chartpack.py`（pack/unpack/info/verify/scancheck/selftest），路径统一走 `Paths.chartPath()`；只有 `.mec` 存在时生效，无压缩文件零行为变化。
+- **模表运行时**（FNF-Modcharting-Tools v1.0.1 移植，默认关）：~35 内建修饰器 + hscript 自定义修饰器、多 Playfield、3D 透视渲染器、`modchart.json` 按拍事件排程（ease/set/hscript）、1–12 键泛化。接管绘制但音符生成 / 判定 / 丢失 / 结算零侵入；无模表数据的谱面零开销。
+- **编舞编辑器与 TCM 真舞台**：`ChoreoEditorState` 镜头与事件轨道编排（cam 事件合并/预览），`StageTcm` 作为引擎真舞台（背景覆盖按实测几何校正、zoom / 素材缩放 / 角色位统一），`CameraEditorData` / `ChoreoEase` 支撑事件数据与缓动。
+- **JS 脚本层**（默认关）：QuickJS 2024-01-13 `@:native` 静态绑定（`third_party/quickjs/` + `QjsNative.hx`），不产 ndll、不改 codesign；脚本发现与 `HostDomain.callOnScripts/setOnScripts` 派发已接入。
+- **Psych 四代模组兼容**：0.6.3 Lua 兼容总开关（哨兵数字 / version / changePresence 空桩）、0.7.3 脚本 API 与五个 Pre 系回调取消语义分流、模组管理页「引擎版本」手动循环匹配（持久化 `meteoric-mod-versions.txt`；指纹自动识别方案已废弃）；两代模组可同场混跑，legacy 模组手动启用不受 1.0.4 开关限制。
+- **转场 / 脚本 / i18n**：FADE（默认）/ MOVE / METEOR / STAR 四档转场重构（ErrorState 不挂转场、横幅类 close）；语言包扩充与 `tools/i18n/check_i18n.py` 门禁；HScript 脚本层 `String.trim/replace` 空指针类坑的兜底与状态脚本生命周期修正。
 
-## 🛠 自 Pre-release 1 以来的修复
+## 🛠 自 Pre-release 2 以来的修复
 
-- **根级滤镜（CRT 等）宽屏适配修复**：宽屏适配 / 全屏 / 拖拽窗口时画面右侧底部被裁、扫描线错乱成粗网格——根级滤镜与 flixel 6 相机缩放的叠加问题，现已正确适配任意窗口比例，滤镜缓存随尺寸自动重建
-- **Weekend1「Philly Streets」长条整根残留**：屏外裁剪用错相机坐标（camGame tween 时误判屏内为离屏），改用音符实际所在相机
-- **安卓 Philly 阶段闪退**：unspawnNotes 数组类型不匹配的野偏移，按声明类型统一
-- **手机端音符全部变左箭头**：禁用态 rgbShader 共享调色板被误用作烘焙色源，改用当前轨道调色板
-- **老手机内存不足闪退削减**：音频流式播放、事件角色巨图预载跳过
-- **长条裁剪残留 / 旧血条开关迁移** 等一批稳定性修复
+- **modchart 长条渲染**：渲染器接管绘制时 `SustainStrip` 从 `updateFramePixels()` 拿到 null（tile 渲染不生成 framePixels），`loadGraphic(null)` 静默失败 → 长条网格整批隐身。改用音符图集 + `frame.uv` 采样，零额外纹理、可合批、保留 RGB 染色；真机确认长条可见。
+- **判定线高亮**：AutoPlay 命中高亮与人物动画共用批处理节流标志，导致高亮被整批跳过；改为独立节流。长条按住期间按 parent 剩余时长续住 `confirm`（`Math.max` 防短命中截短），玩家侧与**对手侧**（含 `NoteHoldCover` 覆盖层）均可持续亮；对手轨偏移改用 `ExtraKeys.songKeys` 适配 >4K。
+- **存档 / 界面稳定性**：存档迁移 JSON 备份不再动态补写匿名对象字段（修迁移期启动即退）；偏移校准返回时落盘 `ClientPrefs`；自由模式返回按钮命中独占 + 行热区禁区（修下滚后误进曲）；FPS 统计编辑器补 `ToggleSwitch.destroy()` 配对与选中态 alpha。
+- **性能**：Lua `getMouseX/getMouseY` 复用 `FlxPoint`、崩溃回调上下文去重先比分量再拼串、`_settleAnimDone` 每帧 new 数组改原地清零；游玩期分配压平、进曲洪峰 GC 自适应（堆 >256MB 才跑 major）。
+- **TCM 曲目演出**：背景覆盖与镜头瞬移按真机实测校正；中段 modchart 改为全轨同步冲击（Beat / Scale / Bumpy / X / Y），不再启用会让相邻轨音符汇聚交叉、读谱难的 3D/旋转/压缩族效果。
+- **清理与归档**：`source/` 遗留备份与未用代码移入 `archives/`（不参与编译、清理检索污染）；Vulkan 实验轨整条删除，仅在 `docs/VULKAN-ROADMAP.md` 留废弃归档（本版未恢复该轨）。
 
 ---
 
