@@ -512,7 +512,12 @@ class LoadingState extends MusicBeatState
 		if (PlayState.SONG == null) return;
 		var p1:String = PlayState.SONG.player1;
 		var p2:String = PlayState.SONG.player2;
-		var names:Array<String> = [PlayState.SONG.gfVersion, p2, p1];
+		// gf 会被 PlayState 跳过构造时（舞台 hide_girlfriend / 极简加载档）不预载其图集：
+		// 否则巨型图集解码纯属白烧时间且常驻内存（判定与 PlayState.willSkipGirlfriend 同一真源）
+		var names:Array<String> = [];
+		if (!PlayState.willSkipGirlfriend()) names.push(PlayState.SONG.gfVersion);
+		names.push(p2);
+		names.push(p1);
 		// 顺带收集 events.json 里 "Change Character" 的目标角色：
 		// 否则这些角色会在 PlayState.create 的 makeEvent 里同步加载图集
 		// （stupid-griefer 实测 3 个事件角色 = 620ms 黑屏卡顿）。
