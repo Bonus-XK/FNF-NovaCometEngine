@@ -12,6 +12,7 @@
 - **JS 脚本层**（默认关）：QuickJS 2024-01-13 `@:native` 静态绑定（`third_party/quickjs/` + `QjsNative.hx`），不产 ndll、不改 codesign；脚本发现与 `HostDomain.callOnScripts/setOnScripts` 派发已接入。
 - **Psych 四代模组兼容**：0.6.3 Lua 兼容总开关（哨兵数字 / version / changePresence 空桩）、0.7.3 脚本 API 与五个 Pre 系回调取消语义分流、模组管理页「引擎版本」手动循环匹配（持久化 `meteoric-mod-versions.txt`；指纹自动识别方案已废弃）；两代模组可同场混跑，legacy 模组手动启用不受 1.0.4 开关限制。
 - **转场 / 脚本 / i18n**：FADE（默认）/ MOVE / METEOR / STAR 四档转场重构（ErrorState 不挂转场、横幅类 close）；语言包扩充与 `tools/i18n/check_i18n.py` 门禁；HScript 脚本层 `String.trim/replace` 空指针类坑的兜底与状态脚本生命周期修正。
+- **全局 CRT 帧数优化（CRT Lite，默认）**：原版 Lottes 后处理每像素 43 次纹理采样（Tri 11 + Bloom 31 + alpha）+ 线性/伽马 `pow`；新增平替分支只取 4 次采样（中心 + R/B 色差 + alpha），用解析式扫描线替代多行高斯卷积，保留桶形畸变、扫描线、shadow mask、暗角与色差。不降采样、不增纹理/离屏缓存、不额外 pass。本机 macOS 真机 A/B：稳态帧数中位数 **285 → 583 FPS（约 2×）**；原版效果可回退：`METEORIC_CRT_CLASSIC=1`、脚本 `quality=1` 或 `setGlobalShader('crt', {quality: 1})`。
 
 ## 🛠 自 Pre-release 2 以来的修复
 
@@ -19,7 +20,7 @@
 - **判定线高亮**：AutoPlay 命中高亮与人物动画共用批处理节流标志，导致高亮被整批跳过；改为独立节流。长条按住期间按 parent 剩余时长续住 `confirm`（`Math.max` 防短命中截短），玩家侧与**对手侧**（含 `NoteHoldCover` 覆盖层）均可持续亮；对手轨偏移改用 `ExtraKeys.songKeys` 适配 >4K。
 - **存档 / 界面稳定性**：存档迁移 JSON 备份不再动态补写匿名对象字段（修迁移期启动即退）；偏移校准返回时落盘 `ClientPrefs`；自由模式返回按钮命中独占 + 行热区禁区（修下滚后误进曲）；FPS 统计编辑器补 `ToggleSwitch.destroy()` 配对与选中态 alpha。
 - **性能**：Lua `getMouseX/getMouseY` 复用 `FlxPoint`、崩溃回调上下文去重先比分量再拼串、`_settleAnimDone` 每帧 new 数组改原地清零；游玩期分配压平、进曲洪峰 GC 自适应（堆 >256MB 才跑 major）。
-- **TCM 曲目演出**：背景覆盖与镜头瞬移按真机实测校正；中段 modchart 改为全轨同步冲击（Beat / Scale / Bumpy / X / Y），不再启用会让相邻轨音符汇聚交叉、读谱难的 3D/旋转/压缩族效果。
+- **TCM 曲目演出**：背景覆盖与镜头瞬移按真机实测校正；中段 modchart 最终收敛为「箭头左右摇摆」——`TipsyX` 按轨相位摇摆（speed 子值提速）+ 全轨 `X` 整体大幅左右摆动（每 2 拍换向）+ 少量 `BeatY` 节拍，撤掉会让相邻轨音符汇聚交叉、读谱难的 3D/旋转/压缩族效果。
 - **清理与归档**：`source/` 遗留备份与未用代码移入 `archives/`（不参与编译、清理检索污染）；Vulkan 实验轨整条删除，仅在 `docs/VULKAN-ROADMAP.md` 留废弃归档（本版未恢复该轨）。
 
 ---
