@@ -96,11 +96,70 @@ class MusicBeatState extends FlxUIState
 	/** 卡顿看门狗：上一次 update 入口的墙钟（探针未武装时不用） */
 	static var _stallClock:Float = 0;
 
+	// ---- 帧耗时日志（METEORIC_FRAME_LOG=1，独立于 METEORIC_LOADPROBE / 不需要 profile 构建）----
+	// 每 2 秒往 crash/framelog.txt 追加一行：平均帧、最差帧、帧数、当前界面、GC 堆。
+	// 判定口径：avg 高 = GPU/填充率吃满（降分辨率或减后处理才有效）；
+	//           只有 max 高、avg 正常 = 偶发 GC/IO/贴图上传尖峰。
+	static var _flOpt:Null<Bool> = null;
+	static var _flAcc:Float = 0;
+	static var _flN:Int = 0;
+	static var _flMax:Float = 0;
+	static var _flT:Float = 0;
+
+	static function frameLogOn():Bool
+	{
+		if (_flOpt != null) return _flOpt;
+		var on:Bool = false;
+		#if sys
+		try { on = (Sys.getEnv('METEORIC_FRAME_LOG') == '1'); } catch (e:Dynamic) {}
+		#end
+		_flOpt = on;
+		return on;
+	}
+
+	static function frameLogStep(now:Float):Void
+	{
+		if (_flT <= 0) { _flT = now; return; }
+		var d:Float = (now - _flT) * 1000;
+		_flT = now;
+		_flAcc += d;
+		_flN++;
+		if (d > _flMax) _flMax = d;
+		if (_flAcc < 2000) return;
+		var avg:Float = _flAcc / (_flN > 0 ? _flN : 1);
+		var sb:StringBuf = new StringBuf();
+		sb.add('t=' + Std.int(haxe.Timer.stamp()) + ' state=');
+		sb.add(Type.getClassName(Type.getClass(FlxG.state)));
+		sb.add(' fps=' + Std.int(1000 / (avg > 0 ? avg : 1)));
+		sb.add(' avg=' + Std.int(avg) + 'ms');
+		sb.add(' max=' + Std.int(_flMax) + 'ms');
+		sb.add(' n=' + _flN);
+		#if cpp
+		try { sb.add(' gc=' + Std.int(cpp.vm.Gc.memInfo64(cpp.vm.Gc.MEM_INFO_CURRENT) / 1048576) + 'mb'); } catch (e:Dynamic) {}
+		#end
+		var rss:Float = PerfProbe.processRSS();
+		if (rss >= 0) sb.add(' ram=' + Std.int(rss) + 'mb');
+		_flAcc = 0; _flN = 0; _flMax = 0;
+		try
+		{
+			var dir:String = './crash';
+			var envDir:String = Sys.getEnv('METEORIC_CRASH_DIR');
+			if (envDir != null && envDir.length > 0) dir = envDir;
+			if (!sys.FileSystem.exists(dir)) sys.FileSystem.createDirectory(dir);
+			var out = sys.io.File.append(dir + '/framelog.txt');
+			out.writeString(sb.toString() + '\n');
+			out.close();
+		}
+		catch (e:Dynamic) {}
+	}
+
 	override function update(elapsed:Float)
 	{
 		// 卡顿看门狗（仅 METEORIC_LOADPROBE=1）：把「界面卡住 N 毫秒」直接记进加载时间线，
 		// 并带上卡住时所在的界面类名。FLAGS.elapsed 被 flixel 夹到 maxElapsed(0.1s)，
 		// 量不出真实冻结时长，所以用墙钟差值。
+		if (frameLogOn()) frameLogStep(haxe.Timer.stamp());
+
 		if (LoadProbe.enabled())
 		{
 			var _now:Float = haxe.Timer.stamp();
