@@ -30,6 +30,10 @@ class DebugLaunch
 	/** Freeplay 下一帧自动「按下回车」的一次性标志。 */
 	public static var pendingAccept:Bool = false;
 
+	/** 自动回车延迟（秒）：让 Freeplay 先稳定几秒，才能量出「热态」下点歌到加载界面的真实耗时。
+	 *  仅 `--meteoric-accept-delay=N` 时非 0。 */
+	public static var acceptDelay:Float = 0;
+
 	public static function init():Void
 	{
 		try
@@ -57,6 +61,11 @@ class DebugLaunch
 				{
 					autoMod = arg.substr('--meteoric-mod='.length);
 					if (autoMod == null || autoMod.length == 0) autoMod = null;
+				}
+				else if (arg.startsWith('--meteoric-accept-delay='))
+				{
+					var d:Null<Float> = Std.parseFloat(arg.substr('--meteoric-accept-delay='.length));
+					if (d != null && d > 0) acceptDelay = d;
 				}
 				else if (arg == '--meteoric-botplay')
 				{

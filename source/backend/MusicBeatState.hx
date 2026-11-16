@@ -84,11 +84,32 @@ class MusicBeatState extends FlxUIState
 		// Meteoric 脚本系统：装载本界面的状态脚本（总开关关闭时立即返回，零行为变化）
 		Scripting.onStateCreate(this);
 		#end
+		// 状态切换打点（配合 STALL 看门狗定位「卡在哪个界面」）
+		LoadProbe.mark('state:create ' + Type.getClassName(Type.getClass(this)));
 	}
 
 	public static var timePassedOnState:Float = 0;
+
+	/** 卡顿看门狗：上一次 update 入口的墙钟（探针未武装时不用） */
+	static var _stallClock:Float = 0;
+
 	override function update(elapsed:Float)
 	{
+		// 卡顿看门狗（仅 METEORIC_LOADPROBE=1）：把「界面卡住 N 毫秒」直接记进加载时间线，
+		// 并带上卡住时所在的界面类名。FLAGS.elapsed 被 flixel 夹到 maxElapsed(0.1s)，
+		// 量不出真实冻结时长，所以用墙钟差值。
+		if (LoadProbe.enabled())
+		{
+			var _now:Float = haxe.Timer.stamp();
+			if (_stallClock > 0)
+			{
+				var _gap:Float = (_now - _stallClock) * 1000;
+				if (_gap > 200)
+					LoadProbe.mark('STALL ' + Std.int(_gap) + 'ms in '
+						+ Type.getClassName(Type.getClass(this)));
+			}
+			_stallClock = _now;
+		}
 		#if sys
 		backend.ModInstaller.update(elapsed);
 		#end

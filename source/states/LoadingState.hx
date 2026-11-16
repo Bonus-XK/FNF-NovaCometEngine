@@ -337,6 +337,10 @@ class LoadingState extends MusicBeatState
 	// 选歌确认时提前启动的预载：谱面线程 + 伴奏/人声并行解码
 	static function startSongPreload(songName:String)
 	{
+		// 兜底起点：模组脚本自行复刻开歌流程时（如 TCM 的 TcmFreeplay）不会经过
+		// loadSongAndSwitchState，时间线得在这里拉起，否则整条链路没有 delta 基准
+		LoadProbe.beginIfInactive('preload:' + songName);
+		LoadProbe.mark('audio-preload:begin');
 		startChartPreload();
 		for (file in getSongAudioFiles(songName))
 			decodeSoundAsync(file);
@@ -1029,6 +1033,8 @@ class LoadingState extends MusicBeatState
 	// 选歌用：记录待加载谱面并切状态。谱面文件不存在时返回 false（调用方自行提示）。
 	inline static public function loadSongAndSwitchState(target:FlxState, songName:String, jsonInput:String, folder:String, stopMusic = false, ?returnState:FlxState = null):Bool
 	{
+		LoadProbe.mark('lss:enter');
+		var _lpT:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
 		if (Song.resolveChartPath(jsonInput, folder) == null)
 		{
 			// 静默失败会让「点了选歌没反应」完全无从排查（2026-10-30 Sonic 菜单即此现象）
@@ -1042,22 +1048,30 @@ class LoadingState extends MusicBeatState
 		pendingChartFolder = folder;
 		pendingReturnState = returnState;
 
-		// 加载时间线从这里起算（Freeplay 选歌确认 / Story / 测试直跳都经本函数）
-		LoadProbe.begin('song=' + jsonInput);
+		// 加载时间线：Freeplay 已在「按下确认」处起算，其余入口（Story/测试直跳）从这里起算
+		LoadProbe.beginIfInactive('song=' + jsonInput);
+		if (LoadProbe.active()) LoadProbe.mark('lss:resolved took='
+			+ Std.int((haxe.Timer.stamp() - _lpT) * 1000) + 'ms');
 
 		#if sys
 		// 提前并行启动谱面解析与音频解码（与切场景同一帧开始，加载界面只需等待收尾）
+		var _lpA:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
 		startSongPreload(songName);
+		if (LoadProbe.active()) LoadProbe.mark('lss:audio-preload took='
+			+ Std.int((haxe.Timer.stamp() - _lpA) * 1000) + 'ms');
 		#end
 
 		FlxTransitionableState.skipNextTransIn = true;
 		FlxTransitionableState.skipNextTransOut = true;
+		LoadProbe.mark('lss:before-switch');
 		MusicBeatState.switchState(getNextState(target, stopMusic));
+		LoadProbe.mark('lss:switch-issued');
 		return true;
 	}
 	
 	static function getNextState(target:FlxState, stopMusic = false):FlxState
 	{
+		var _lpT:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
 		var directory:String = 'shared';
 		var weekDir:String = StageData.forceNextDirectory;
 		StageData.forceNextDirectory = null;
@@ -1066,6 +1080,8 @@ class LoadingState extends MusicBeatState
 		if (pendingChartJson != null)
 		{			// 谱面缓存命中：直接使用解析结果
 			var cached:SwagSong = Song.tryLoadFromCache(pendingChartJson, pendingChartFolder);
+			if (LoadProbe.active()) LoadProbe.mark('next:cache-probe hit=' + (cached != null)
+				+ ' took=' + Std.int((haxe.Timer.stamp() - _lpT) * 1000) + 'ms');
 			if (cached != null)
 			{
 				PlayState.setSong(cached);
@@ -1080,8 +1096,13 @@ class LoadingState extends MusicBeatState
 				Paths.setCurrentLevel(directory);
 
 				// 谱面与音频都已在缓存（如刚试听过）：直接进入游戏，跳过加载界面
-				if (Song.songAudioCached(PlayState.SONG.song)
-					&& (!ClientPrefs.data.preRenderNotes || Note.chartBakesReady()))
+				var _lpA:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
+				var _lpAudio:Bool = Song.songAudioCached(PlayState.SONG.song);
+				if (LoadProbe.active()) LoadProbe.mark('next:audio-cached=' + _lpAudio
+					+ ' took=' + Std.int((haxe.Timer.stamp() - _lpA) * 1000) + 'ms');
+				var _lpBakes:Bool = !ClientPrefs.data.preRenderNotes || Note.chartBakesReady();
+				if (LoadProbe.active()) LoadProbe.mark('next:bakes-ready=' + _lpBakes);
+				if (_lpAudio && _lpBakes)
 				{
 					pendingReturnState = null;
 					#if NO_PRELOAD_ALL
@@ -1090,6 +1111,7 @@ class LoadingState extends MusicBeatState
 					{
 						if (stopMusic && FlxG.sound.music != null)
 							FlxG.sound.music.stop();
+						LoadProbe.mark('next:fastpath-to-playstate');
 						return target;
 					}
 				}

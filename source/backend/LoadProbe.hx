@@ -73,6 +73,14 @@ class LoadProbe
 		if (_flushEach) flush();
 	}
 
+	/** 同 begin，但已有时间线时不重置（用于「上层已起算」的嵌套入口）。 */
+	public static function beginIfInactive(tag:String):Void
+	{
+		if (!enabled()) return;
+		if (_active) return;
+		begin(tag);
+	}
+
 	/** 结束时间线：打 END 点并落盘。未武装时无操作。 */
 	public static function end():Void
 	{

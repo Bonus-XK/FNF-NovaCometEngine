@@ -741,14 +741,20 @@ class FreeplayState extends MusicBeatState
 		}
 
 		// 调试启动参数：一次性自动「回车」进入 --meteoric-song 指定的曲目
+		// （--meteoric-accept-delay=N 先等 N 秒，用于量「热态」点歌耗时）
 		if (backend.DebugLaunch.pendingAccept)
 		{
-			backend.DebugLaunch.pendingAccept = false;
-			accepted = true;
+			if (backend.DebugLaunch.acceptDelay <= 0 || MusicBeatState.timePassedOnState >= backend.DebugLaunch.acceptDelay)
+			{
+				backend.DebugLaunch.pendingAccept = false;
+				accepted = true;
+			}
 		}
 
 		if (accepted)
 		{
+			// 时间线从「按下确认」起算：玩家感知的加载从这一刻开始（此前的菜单导航不算）
+			LoadProbe.begin('freeplay:' + Paths.formatToSongPath(songs[curSelected].songName));
 			LoadProbe.mark('freeplay:accept');
 			persistentUpdate = false;
 			var songLowercase:String = Paths.formatToSongPath(songs[curSelected].songName);
@@ -757,7 +763,11 @@ class FreeplayState extends MusicBeatState
 			PlayState.isStoryMode = false;
 			PlayState.storyDifficulty = curDifficulty;
 
-			if (Song.resolveChartPath(poop, songLowercase) == null)
+			var _lpT:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
+			var _lpPath:String = Song.resolveChartPath(poop, songLowercase);
+			if (LoadProbe.active()) LoadProbe.mark('freeplay:chart-resolved took='
+				+ Std.int((haxe.Timer.stamp() - _lpT) * 1000) + 'ms');
+			if (_lpPath == null)
 			{
 				missingText.text = Lang.tOr('freeplay.missingChart', '在加载铺面文件时出错：\n缺失的文件：data/') + songLowercase + '/' + poop;
 				missingText.screenCenter(Y);
@@ -769,7 +779,11 @@ class FreeplayState extends MusicBeatState
 			}
 
 			// 谱面+音频+音符烘焙都就绪时跳过加载界面，直接进 Song
-			if (LoadingState.canSkipLoading(songLowercase, poop, songLowercase))
+			var _lpT2:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
+			var _lpSkip:Bool = LoadingState.canSkipLoading(songLowercase, poop, songLowercase);
+			if (LoadProbe.active()) LoadProbe.mark('freeplay:canSkip=' + _lpSkip + ' took='
+				+ Std.int((haxe.Timer.stamp() - _lpT2) * 1000) + 'ms');
+			if (_lpSkip)
 			{
 				if(colorTween != null) colorTween.cancel();
 				#if PRELOAD_ALL
