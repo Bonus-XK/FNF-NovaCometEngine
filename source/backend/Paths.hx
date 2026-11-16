@@ -191,6 +191,90 @@ class Paths
 	static var imageDecodeQueued:Map<String, Bool> = [];
 	/** 解码等待者：加载界面把人物大图解码纳入加载进度（完成/失败都会触发，不悬挂） */
 	static var imageDecodeWaiters:Map<String, Array<Void->Void>> = [];
+	// ===== 后台（工作线程）PNG 解码 =====
+	// 冷启动时一张 8192² 图集要解码 400ms，主线程只能干等 —— 加载条是死的。
+	// 这里把解码交给 ndll 里的 pthread（只用 libpng + 自己的 malloc，**不碰任何 hxcpp 对象**，
+	// 因为本机构建没开 HXCPP_MULTI_THREADED，工作线程分配 Haxe 对象会破坏堆）。
+	// 主线程只做三件事：probe 尺寸 → 分配 BGRA 缓冲 → 每帧 poll。等待期间照常渲染。
+	// ndll 没有这些原语（比如别人的构建）时 load 抛异常 → 永久回退同步解码。
+	#if cpp
+	static var _bgInitTried:Bool = false;
+	static var _bgOk:Bool = false;
+	static var _bgProbe:Dynamic = null;
+	static var _bgStart:Dynamic = null;
+	static var _bgPoll:Dynamic = null;
+	// 工作线程正在写这块内存，必须由主线程强引用住（GC 不会移动，但不能让它变成垃圾）
+	static var _bgFile:String = null;
+	static var _bgImage:lime.graphics.Image = null;
+	static var _bgBytes:haxe.io.Bytes = null;
+	/** 后台解码期间主线程跑过的帧数（>0 就说明解码是真的在并行，不是换了个地方卡） */
+	static var _bgPolls:Int = 0;
+
+	static function bgInit():Bool
+	{
+		if (_bgInitTried) return _bgOk;
+		_bgInitTried = true;
+		try
+		{
+			_bgProbe = cpp.Lib.load('lime', 'lime_png_bg_probe', 1);
+			_bgStart = cpp.Lib.load('lime', 'lime_png_bg_start', 2);
+			_bgPoll = cpp.Lib.load('lime', 'lime_png_bg_poll', 1);
+			_bgOk = (_bgProbe != null && _bgStart != null && _bgPoll != null);
+		}
+		catch (e:Dynamic) { _bgOk = false; }
+		return _bgOk;
+	}
+
+	/** 起一张后台解码；已有一张在解时返回 false。 */
+	static function bgDecodeStart(file:String):Bool
+	{
+		if (_bgFile != null || !bgInit()) return false;
+		try
+		{
+			var packed:Int = _bgProbe(file);
+			if (packed < 0) return false;
+			var w:Int = (packed >> 16) & 0xFFFF;
+			var h:Int = packed & 0xFFFF;
+			var need:Int = w * h * 4;
+			if (w <= 0 || h <= 0 || need <= 0) return false;
+			var bytes:haxe.io.Bytes = haxe.io.Bytes.alloc(need);
+			var arr:lime.utils.UInt8Array = lime.utils.UInt8Array.fromBytes(bytes);
+			var buf:lime.graphics.ImageBuffer = new lime.graphics.ImageBuffer(arr, w, h, 32, lime.graphics.PixelFormat.BGRA32);
+			buf.premultiplied = true;
+			buf.transparent = true;
+			var img:lime.graphics.Image = new lime.graphics.Image(buf);
+			_bgStart(img, file);
+			_bgPolls = 0;
+			_bgFile = file;
+			_bgImage = img;
+			_bgBytes = bytes;
+			return true;
+		}
+		catch (e:Dynamic)
+		{
+			_bgFile = null; _bgImage = null; _bgBytes = null;
+			_bgOk = false; // 这次失败就当没这能力，回退同步解码
+			return false;
+		}
+	}
+
+	/** 0 = 解码中，1 = 完成，-1 = 失败，-2 = 空闲 */
+	static function bgDecodePoll():Int
+	{
+		if (_bgFile == null) return -2;
+		try { return _bgPoll(null); } catch (e:Dynamic) { return -1; }
+	}
+
+	/** 后台解码完成后把缓冲包成 BitmapData（零拷贝：缓冲本来就是 BGRA premultiplied）。 */
+	static function bgDecodeTake():BitmapData
+	{
+		var img:lime.graphics.Image = _bgImage;
+		_bgFile = null; _bgImage = null; _bgBytes = null;
+		if (img == null) return null;
+		try { return openfl.display.BitmapData.fromImage(img); } catch (e:Dynamic) { return null; }
+	}
+	#end
+
 	/** 请求异步解码一张图（已缓存/已排队/已解码则忽略；onDone 保证最终被调用一次） */
 	public static function requestImageDecode(file:String, ?onDone:Void->Void):Void
 	{
@@ -236,6 +320,35 @@ class Paths
 	/** 每帧最多解码 maxPerFrame 张（主线程分片，不阻塞；加载界面亦用它手动泵移动端） */
 	public static function tickImageDecode(maxPerFrame:Int):Void
 	{
+		// 1) 先收尾上一张后台解码（不阻塞：只在 poll 报告完成时搬运结果）
+		#if cpp
+		if (_bgFile != null)
+		{
+			var st:Int = bgDecodePoll();
+			if (st == 0) { _bgPolls++; return; } // 还在解，本帧不启动新的，让主线程继续渲染
+			var bgFile:String = _bgFile;
+			var bmp:BitmapData = (st == 1) ? bgDecodeTake() : null;
+			if (bmp == null)
+			{
+				// 后台失败（坏文件/尺寸不符/线程起不来）：清理后回退同步解码
+				bgDecodeTake();
+				LoadProbe.mark('img:bg-failed');
+			}
+			else
+			{
+				LoadProbe.markI('img:bg-done frames', _bgPolls);
+				if (pendingBitmaps.exists(bgFile)) bmp.dispose();
+				else
+				{
+					pendingBitmaps.set(bgFile, bmp);
+					try { imgCacheWrite(bgFile, bmp); } catch (e:Dynamic) {}
+				}
+				fireImageDecodeWaiters(bgFile);
+				TraceDecoded(bgFile, 0);
+			}
+		}
+		#end
+
 		var n:Int = 0;
 		while (imageDecodeQueue.length > 0 && n < maxPerFrame)
 		{
@@ -246,6 +359,27 @@ class Paths
 				fireImageDecodeWaiters(file);
 				continue;
 			}
+			// 2) 磁盘缓存命中：直接读回（几十毫秒），不必起线程
+			var cached:BitmapData = null;
+			try { cached = imgCacheRead(file); } catch (e:Dynamic) { cached = null; }
+			if (cached != null)
+			{
+				pendingBitmaps.set(file, cached);
+				LoadProbe.markIR('img:cache-hit px', cached.width * cached.height, file);
+				fireImageDecodeWaiters(file);
+				n++;
+				continue;
+			}
+			// 3) 未命中：交给后台线程解（本帧只启动，不等待）
+			#if cpp
+			if (bgDecodeStart(file))
+			{
+				LoadProbe.markIR('img:bg-start px', 0, file);
+				n++;
+				return;
+			}
+			#end
+			// 4) 兜底：同步解码（会顺带写缓存）
 			var _t0:Float = haxe.Timer.stamp();
 			try
 			{
@@ -260,11 +394,17 @@ class Paths
 			}
 			catch (e:Dynamic) {}
 			fireImageDecodeWaiters(file);
-			trace('[IMG+' + Std.int(_t0 * 1000) + '] decode ' + Std.int((haxe.Timer.stamp() - _t0) * 1000) + 'ms '
-				+ (bmpSize(file)) + ' -> ' + imageDecodeQueue.length + ' left');
-			LoadProbe.markIR('img:decode ms', Std.int((haxe.Timer.stamp() - _t0) * 1000), file);
+			TraceDecoded(file, Std.int((haxe.Timer.stamp() - _t0) * 1000));
 			n++;
 		}
+	}
+
+	/** 同步解码日志（保留原 [IMG+...] 行，便于老日志对照） */
+	static function TraceDecoded(file:String, ms:Int):Void
+	{
+		trace('[IMG+' + Std.int(haxe.Timer.stamp() * 1000) + '] decode ' + ms + 'ms '
+			+ (bmpSize(file)) + ' -> ' + imageDecodeQueue.length + ' left');
+		LoadProbe.markIR('img:decode ms', ms, file);
 	}
 
 	// ===== 解码结果磁盘缓存 =====
