@@ -44,25 +44,59 @@ class StageTcm extends BaseStage
 	var far:Array<BGSprite> = [];
 	var near:Array<BGSprite> = [];
 
+	/** 每相贴图是否已装载（下标 = 相号 - 1）。 */
+	var phaseLoaded:Array<Bool> = [false, false, false];
+
 	override function create()
 	{
+		// 只建**空壳**占位：6 个成员仍在 create 里一次 add 完，z 序与原来逐字节一致
+		//（懒加载若在后续帧 add，会插到角色组之上，舞台就盖住人物了）。
+		// 贴图按需装载：进曲只解码起始阶段那 2 张，其余阶段交给分片解码队列在倒计时
+		// 空闲期补 —— 实测每张 1920x1080 约 25~35ms，4 张 ≈ 120ms 解码 + 32MB 显存提交，
+		// 原先全部压在进曲窗口里（用户感知为「加载条满后还卡一下」）。
 		for (i in 1...(PHASES + 1))
 		{
-			var f:BGSprite = new BGSprite('stages/tcm/tcm_p' + i + '_far', IMG_X, IMG_Y, SF, SF);
-			f.scale.set(IMG_SCALE, IMG_SCALE);
-			f.updateHitbox();
+			var f:BGSprite = new BGSprite(null, IMG_X, IMG_Y, SF, SF);
 			f.visible = (i == 1);
 			add(f);
 			far.push(f);
 
-			var n:BGSprite = new BGSprite('stages/tcm/tcm_p' + i + '_near', IMG_X, IMG_Y, SF, SF);
-			n.scale.set(IMG_SCALE, IMG_SCALE);
-			n.updateHitbox();
+			var n:BGSprite = new BGSprite(null, IMG_X, IMG_Y, SF, SF);
 			n.visible = (i == 1);
 			add(n);
 			near.push(n);
 		}
 		setPhase(START_PHASE.get(Paths.formatToSongPath(songName)));
+
+		// 其余阶段：进队异步解码（tickMaintenance 每帧泵 2 张），切相事件到来时通常已就位；
+		// 万一没赶上，ensurePhase 内 Paths.image() 会同步兜底，行为不变。
+		for (i in 1...(PHASES + 1))
+		{
+			if (phaseLoaded[i - 1]) continue;
+			try
+			{
+				Paths.requestImageDecode(Paths.resolveAssetPath('images/stages/tcm/tcm_p' + i + '_far'));
+				Paths.requestImageDecode(Paths.resolveAssetPath('images/stages/tcm/tcm_p' + i + '_near'));
+			}
+			catch (e:Dynamic) {}
+		}
+	}
+
+	/** 按需装载某一相的贴图（已装载则直接返回）。 */
+	function ensurePhase(i:Int):Void
+	{
+		if (i < 1 || i > PHASES || phaseLoaded[i - 1]) return;
+		phaseLoaded[i - 1] = true;
+
+		var f:BGSprite = far[i - 1];
+		f.loadGraphic(Paths.image('stages/tcm/tcm_p' + i + '_far'));
+		f.scale.set(IMG_SCALE, IMG_SCALE);
+		f.updateHitbox();
+
+		var n:BGSprite = near[i - 1];
+		n.loadGraphic(Paths.image('stages/tcm/tcm_p' + i + '_near'));
+		n.scale.set(IMG_SCALE, IMG_SCALE);
+		n.updateHitbox();
 	}
 
 	/** 快速重开不重建舞台实例 → 回该曲初始阶段。 */
@@ -90,6 +124,7 @@ class StageTcm extends BaseStage
 		if (n == null) n = 1;
 		if (n < 1) n = 1;
 		if (n > PHASES) n = PHASES;
+		ensurePhase(n);
 		for (i in 0...PHASES)
 		{
 			far[i].visible = (i == n - 1);
