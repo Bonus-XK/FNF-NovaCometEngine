@@ -134,8 +134,7 @@ class Character extends FlxSprite
 				#end
 
 				var json:CharacterFile = cast Json.parse(rawJson);
-				if (_probeOn) backend.LoadProbe.mark('char:json ' + curCharacter
-					+ ' took=' + Std.int((haxe.Timer.stamp() - _probeT0) * 1000) + 'ms');
+				if (_probeOn) backend.LoadProbe.markIR('char:json ms', Std.int((haxe.Timer.stamp() - _probeT0) * 1000), curCharacter);
 				var useAtlas:Bool = false;
 
 				#if MODS_ALLOWED
@@ -185,8 +184,7 @@ class Character extends FlxSprite
 				else
 					frames = AtlasFrameMaker.construct(json.image);
 
-				if (_probeOn) backend.LoadProbe.mark('char:frames ' + curCharacter
-					+ ' took=' + Std.int((haxe.Timer.stamp() - _probeT0) * 1000) + 'ms total');
+				if (_probeOn) backend.LoadProbe.markIR('char:frames ms', Std.int((haxe.Timer.stamp() - _probeT0) * 1000), curCharacter);
 				imageFile = json.image;
 				vocalsFile = json.vocals_file != null ? json.vocals_file : '';
 				if(json.scale != 1) {
@@ -246,9 +244,7 @@ class Character extends FlxSprite
 				} else {
 					quickAnimAdd('idle', 'BF idle dance');
 				}
-				if (_probeOn) backend.LoadProbe.mark('char:anims ' + curCharacter
-					+ ' anims=' + (animationsArray != null ? animationsArray.length : 0)
-					+ ' took=' + Std.int((haxe.Timer.stamp() - _probeT0) * 1000) + 'ms total');
+				if (_probeOn) backend.LoadProbe.markIR('char:anims ms', Std.int((haxe.Timer.stamp() - _probeT0) * 1000), curCharacter);
 				#if flxanimate
 				if(isAnimateAtlas) copyAtlasValues();
 				#end
@@ -294,8 +290,7 @@ class Character extends FlxSprite
 		}
 
 		if (_probeOn)
-			backend.LoadProbe.mark('char:built ' + curCharacter
-				+ ' took=' + Std.int((haxe.Timer.stamp() - _probeT0) * 1000) + 'ms');
+			backend.LoadProbe.markIR('char:built ms', Std.int((haxe.Timer.stamp() - _probeT0) * 1000), curCharacter);
 	}
 
 	#if flxanimate

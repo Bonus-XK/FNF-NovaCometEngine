@@ -262,9 +262,7 @@ class Paths
 			fireImageDecodeWaiters(file);
 			trace('[IMG+' + Std.int(_t0 * 1000) + '] decode ' + Std.int((haxe.Timer.stamp() - _t0) * 1000) + 'ms '
 				+ (bmpSize(file)) + ' -> ' + imageDecodeQueue.length + ' left');
-			LoadProbe.mark('img:decode ' + haxe.io.Path.withoutDirectory(file)
-				+ ' took=' + Std.int((haxe.Timer.stamp() - _t0) * 1000) + 'ms ' + bmpSize(file)
-				+ ' left=' + imageDecodeQueue.length);
+			LoadProbe.markIR('img:decode ms', Std.int((haxe.Timer.stamp() - _t0) * 1000), file);
 			n++;
 		}
 	}
@@ -667,8 +665,11 @@ class Paths
 
 		if (bitmap != null)
 		{
-			if (LoadProbe.active()) LoadProbe.mark('img:resolved ' + key + ' ' + bitmap.width + 'x' + bitmap.height
-				+ ' from=' + (pendingHit ? "pending" : "disk/cache"));
+			if (LoadProbe.active())
+			{
+				LoadProbe.markIR('img:resolved px', bitmap.width * bitmap.height, key);
+				if (pendingHit) LoadProbe.mark('img:from-pending');
+			}
 			if (!localTrackedAssets.contains(file)) localTrackedAssets.push(file); // 去重
 			// 图集降采样（Meteoric Fix 续）：>2048px 大图缩到 ClientPrefs.data.textureScale（桌面默认 50%）。
 			// 各图集消费者（flxanimate 2020 spritemap / sparrow XML）同步缩放帧坐标；旧格式
@@ -852,18 +853,15 @@ class Paths
 		var tA:Float = probe ? haxe.Timer.stamp() : 0;
 		// allowPack=false：图集加载器绝不参与运行时密排列（帧坐标基于原图，打包会破坏 UV/空指针）
 		var imageLoaded:FlxGraphic = image(key, library, true, true, -1, false);
-		if (probe) LoadProbe.mark('atlas:image ' + key + ' took=' + Std.int((haxe.Timer.stamp() - tA) * 1000)
-			+ 'ms ' + (imageLoaded != null && imageLoaded.bitmap != null ? imageLoaded.bitmap.width + 'x' + imageLoaded.bitmap.height : "null"));
+		if (probe) LoadProbe.markIR('atlas:image ms', Std.int((haxe.Timer.stamp() - tA) * 1000), key);
 
 		var myXml:Dynamic = getPath('images/$key.xml', TEXT, library, true);
 		if(OpenFlAssets.exists(myXml) #if MODS_ALLOWED || (FileSystem.exists(myXml) && (useMod = true)) #end )
 		{
 			var _xmlText:String = (useMod ? File.getContent(myXml) : atlasData(myXml));
-			if (probe) LoadProbe.mark('atlas:xml ' + key + ' len=' + (_xmlText != null ? _xmlText.length : -1)
-				+ ' took=' + Std.int((haxe.Timer.stamp() - tA) * 1000) + 'ms');
+			if (probe) LoadProbe.markIR('atlas:xml ms', Std.int((haxe.Timer.stamp() - tA) * 1000), key);
 			var _fr:FlxAtlasFrames = FlxAtlasFrames.fromSparrow(imageLoaded, _xmlText);
-			if (probe) LoadProbe.mark('atlas:parsed ' + key + ' frames=' + (_fr != null ? _fr.frames.length : -1)
-				+ ' took=' + Std.int((haxe.Timer.stamp() - tA) * 1000) + 'ms');
+			if (probe) LoadProbe.markIR('atlas:parsed ms', Std.int((haxe.Timer.stamp() - tA) * 1000), key);
 			return _fr;
 		}
 		else

@@ -765,8 +765,7 @@ class FreeplayState extends MusicBeatState
 
 			var _lpT:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
 			var _lpPath:String = Song.resolveChartPath(poop, songLowercase);
-			if (LoadProbe.active()) LoadProbe.mark('freeplay:chart-resolved took='
-				+ Std.int((haxe.Timer.stamp() - _lpT) * 1000) + 'ms');
+			if (LoadProbe.active()) LoadProbe.markI('freeplay:chart-resolved ms', Std.int((haxe.Timer.stamp() - _lpT) * 1000));
 			if (_lpPath == null)
 			{
 				missingText.text = Lang.tOr('freeplay.missingChart', '在加载铺面文件时出错：\n缺失的文件：data/') + songLowercase + '/' + poop;
@@ -781,8 +780,8 @@ class FreeplayState extends MusicBeatState
 			// 谱面+音频+音符烘焙都就绪时跳过加载界面，直接进 Song
 			var _lpT2:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
 			var _lpSkip:Bool = LoadingState.canSkipLoading(songLowercase, poop, songLowercase);
-			if (LoadProbe.active()) LoadProbe.mark('freeplay:canSkip=' + _lpSkip + ' took='
-				+ Std.int((haxe.Timer.stamp() - _lpT2) * 1000) + 'ms');
+			if (LoadProbe.active()) LoadProbe.markI(_lpSkip ? 'freeplay:canSkip 1' : 'freeplay:canSkip 0',
+				Std.int((haxe.Timer.stamp() - _lpT2) * 1000));
 			if (_lpSkip)
 			{
 				if(colorTween != null) colorTween.cancel();

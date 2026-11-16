@@ -85,7 +85,7 @@ class MusicBeatState extends FlxUIState
 		Scripting.onStateCreate(this);
 		#end
 		// 状态切换打点（配合 STALL 看门狗定位「卡在哪个界面」）
-		LoadProbe.mark('state:create ' + Type.getClassName(Type.getClass(this)));
+		LoadProbe.markIR('state:create', 0, Type.getClassName(Type.getClass(this)));
 	}
 
 	public static var timePassedOnState:Float = 0;
@@ -105,8 +105,7 @@ class MusicBeatState extends FlxUIState
 			{
 				var _gap:Float = (_now - _stallClock) * 1000;
 				if (_gap > 200)
-					LoadProbe.mark('STALL ' + Std.int(_gap) + 'ms in '
-						+ Type.getClassName(Type.getClass(this)));
+					LoadProbe.markIR('STALL ms', Std.int(_gap), Type.getClassName(Type.getClass(this)));
 			}
 			_stallClock = _now;
 		}

@@ -245,7 +245,7 @@ class LoadingState extends MusicBeatState
 					chartMessage = (_combo != null) ? _combo : Song.loadFromFile(_syncChartPath, pendingChartJson == 'events');
 					CrashHandler.mark('LoadingState:chart-loaded');
 					trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] chartParseDone');
-					LoadProbe.mark('chart:parse-done notes=' + (chartMessage != null && chartMessage.notes != null ? chartMessage.notes.length : -1));
+					LoadProbe.markI('chart:parse-done sections', (chartMessage != null && chartMessage.notes != null ? chartMessage.notes.length : -1));
 					onChartLoaded();
 				}
 				catch(e:Dynamic)
@@ -275,7 +275,7 @@ class LoadingState extends MusicBeatState
 					chartMessage = (_combo != null) ? _combo : Song.loadFromFile(filePath, pendingChartJson == 'events');
 					CrashHandler.mark('LoadingState:chart-loaded');
 					trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] chartParseDone');
-					LoadProbe.mark('chart:parse-done notes=' + (chartMessage != null && chartMessage.notes != null ? chartMessage.notes.length : -1));
+					LoadProbe.markI('chart:parse-done sections', (chartMessage != null && chartMessage.notes != null ? chartMessage.notes.length : -1));
 					onChartLoaded();
 				}
 				catch(e:Dynamic)
@@ -437,9 +437,7 @@ class LoadingState extends MusicBeatState
 			// 歌曲音频走流式（Vorbis+OpenAL 环形缓冲，不驻留整首 PCM，省 20-40MB/首）
 			var snd:Sound = Paths.streamSongAudio(file);
 			if (probeOn)
-				LoadProbe.mark('audio:decode ' + haxe.io.Path.withoutDirectory(file)
-					+ ' took=' + Std.int((haxe.Timer.stamp() - probeT0) * 1000) + 'ms'
-					+ ' len=' + (snd != null ? Std.int(snd.length * 1000) + 'ms' : "null"));
+				LoadProbe.markIR('audio:decode ms', Std.int((haxe.Timer.stamp() - probeT0) * 1000), file);
 			audioStreamComplete({file: file, sound: snd});
 		}
 		catch(e:Dynamic)
@@ -846,7 +844,7 @@ class LoadingState extends MusicBeatState
 
 	function onChartLoadFailed()
 	{
-		LoadProbe.mark('chart:load-failed ' + Std.string(chartError));
+		LoadProbe.markIR('chart:load-failed', 0, Std.string(chartError));
 		LoadProbe.end();
 		clearPendingChart();
 		loadFailed = true;
@@ -873,10 +871,10 @@ class LoadingState extends MusicBeatState
 
 			var callback = callbacks.add("library:" + library);
 			trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] libLoadStart ' + library);
-			LoadProbe.mark('lib:begin ' + library);
+			LoadProbe.markIR('lib:begin', 0, library);
 			Assets.loadLibrary(library).onComplete(function (_) {
 				trace('[LOAD+' + Std.int(haxe.Timer.stamp()*1000) + '] libLoadDone ' + library);
-				LoadProbe.mark('lib:done ' + library);
+				LoadProbe.markIR('lib:done', 0, library);
 				callback();
 			});
 		}
@@ -1050,15 +1048,13 @@ class LoadingState extends MusicBeatState
 
 		// 加载时间线：Freeplay 已在「按下确认」处起算，其余入口（Story/测试直跳）从这里起算
 		LoadProbe.beginIfInactive('song=' + jsonInput);
-		if (LoadProbe.active()) LoadProbe.mark('lss:resolved took='
-			+ Std.int((haxe.Timer.stamp() - _lpT) * 1000) + 'ms');
+		if (LoadProbe.active()) LoadProbe.markI('lss:resolved ms', Std.int((haxe.Timer.stamp() - _lpT) * 1000));
 
 		#if sys
 		// 提前并行启动谱面解析与音频解码（与切场景同一帧开始，加载界面只需等待收尾）
 		var _lpA:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
 		startSongPreload(songName);
-		if (LoadProbe.active()) LoadProbe.mark('lss:audio-preload took='
-			+ Std.int((haxe.Timer.stamp() - _lpA) * 1000) + 'ms');
+		if (LoadProbe.active()) LoadProbe.markI('lss:audio-preload ms', Std.int((haxe.Timer.stamp() - _lpA) * 1000));
 		#end
 
 		FlxTransitionableState.skipNextTransIn = true;
@@ -1080,8 +1076,8 @@ class LoadingState extends MusicBeatState
 		if (pendingChartJson != null)
 		{			// 谱面缓存命中：直接使用解析结果
 			var cached:SwagSong = Song.tryLoadFromCache(pendingChartJson, pendingChartFolder);
-			if (LoadProbe.active()) LoadProbe.mark('next:cache-probe hit=' + (cached != null)
-				+ ' took=' + Std.int((haxe.Timer.stamp() - _lpT) * 1000) + 'ms');
+			if (LoadProbe.active()) LoadProbe.markI(cached != null ? 'next:cache-probe hit 1' : 'next:cache-probe hit 0',
+				Std.int((haxe.Timer.stamp() - _lpT) * 1000));
 			if (cached != null)
 			{
 				PlayState.setSong(cached);
@@ -1098,10 +1094,10 @@ class LoadingState extends MusicBeatState
 				// 谱面与音频都已在缓存（如刚试听过）：直接进入游戏，跳过加载界面
 				var _lpA:Float = LoadProbe.active() ? haxe.Timer.stamp() : 0;
 				var _lpAudio:Bool = Song.songAudioCached(PlayState.SONG.song);
-				if (LoadProbe.active()) LoadProbe.mark('next:audio-cached=' + _lpAudio
-					+ ' took=' + Std.int((haxe.Timer.stamp() - _lpA) * 1000) + 'ms');
+				if (LoadProbe.active()) LoadProbe.markI(_lpAudio ? 'next:audio-cached 1' : 'next:audio-cached 0',
+					Std.int((haxe.Timer.stamp() - _lpA) * 1000));
 				var _lpBakes:Bool = !ClientPrefs.data.preRenderNotes || Note.chartBakesReady();
-				if (LoadProbe.active()) LoadProbe.mark('next:bakes-ready=' + _lpBakes);
+				if (LoadProbe.active() && _lpBakes) LoadProbe.mark('next:bakes-ready');
 				if (_lpAudio && _lpBakes)
 				{
 					pendingReturnState = null;

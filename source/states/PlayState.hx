@@ -844,7 +844,7 @@ class PlayState extends MusicBeatState
 		gfGroup = new FlxSpriteGroup(GF_X, GF_Y);
 
 		PerfProbe.mark('stage: begin ' + curStage);
-		LoadProbe.mark('play:stage-begin ' + curStage + ' bgchars=' + showBgChars);
+		LoadProbe.markIR('play:stage-begin bgchars', showBgChars ? 1 : 0, curStage);
 		trace('[Stage] create stage: ' + curStage + ' | replayMode=' + replayMode + ' | isPixelStage=' + isPixelStage);
 
 		if (showBgChars)

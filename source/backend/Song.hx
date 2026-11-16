@@ -454,7 +454,7 @@ class Song
 			LoadProbe.mark('chart:cache-hit');
 			var _tCopy:Float = haxe.Timer.stamp();
 			var _c:SwagSong = copySong(cachedHit);
-			LoadProbe.mark('chart:cache-copy took=' + Std.int((haxe.Timer.stamp() - _tCopy) * 1000) + 'ms');
+			LoadProbe.markI('chart:cache-copy ms', Std.int((haxe.Timer.stamp() - _tCopy) * 1000));
 			return _c;
 		}
 
@@ -494,7 +494,7 @@ class Song
 		}
 		#end
 
-		LoadProbe.mark('chart:read-begin size=' + logicalSize);
+		LoadProbe.markI('chart:read-begin bytes', logicalSize);
 		var rawJson = null;
 		if (isPacked)
 		{
@@ -517,7 +517,7 @@ class Song
 			#end
 		}
 
-		LoadProbe.mark('chart:read-done len=' + (rawJson != null ? rawJson.length : -1));
+		LoadProbe.markI('chart:read-done chars', (rawJson != null ? rawJson.length : -1));
 
 		while (!rawJson.endsWith("}"))
 		{
@@ -552,7 +552,7 @@ class Song
 		{
 			var _tCache:Float = haxe.Timer.stamp();
 			cacheChart(chartCacheKey(filePath), copySong(songJson));
-			LoadProbe.mark('chart:cache-store took=' + Std.int((haxe.Timer.stamp() - _tCache) * 1000) + 'ms');
+			LoadProbe.markI('chart:cache-store ms', Std.int((haxe.Timer.stamp() - _tCache) * 1000));
 		}
 		else
 			LoadProbe.mark('chart:cache-skip large');
