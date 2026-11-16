@@ -62,6 +62,7 @@ class MusicBeatState extends FlxUIState
 		#if MODS_ALLOWED Mods.updatedOnState = false; #end
 
 		super.create();
+		LoadProbe.mark('mb:super-create');
 
 		#if mobile
 		// 菜单/界面统一挂载 virtualpad A 键：触控选择，按 A 确认
@@ -77,9 +78,11 @@ class MusicBeatState extends FlxUIState
 		if(!skip) {
 			openSubState(new CustomFadeTransition(0.7, true));
 		}
+		LoadProbe.mark('mb:transition');
 		FlxTransitionableState.skipNextTransOut = false;
 		timePassedOnState = 0;
 
+		LoadProbe.mark('mb:pre-scripting');
 		#if (MODS_ALLOWED && HSCRIPT_ALLOWED && sys)
 		// Meteoric 脚本系统：装载本界面的状态脚本（总开关关闭时立即返回，零行为变化）
 		Scripting.onStateCreate(this);

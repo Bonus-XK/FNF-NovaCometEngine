@@ -528,6 +528,12 @@ class Paths
 		return file;
 	}
 
+	/** 长音轨（暂停曲）：流式取用，进曲预热不整首解码。见 returnSound 的 forceStream。 */
+	inline static public function musicStreamed(key:String, ?library:String):Sound
+	{
+		return returnSound('music', key, library, true);
+	}
+
 	inline static public function voices(song:String, postfix:String = null):Any
 	{
 		#if html5
@@ -1040,12 +1046,20 @@ class Paths
 		return Sound.fromFile(filePath);
 	}
 
-	public static function returnSound(path:String, key:String, ?library:String) {
+	/**
+	 * 取音频（带缓存）。
+	 *
+	 * `forceStream`：长音轨（暂停曲等）走流式解码 —— 否则 `Sound.fromFile` 会把整首
+	 * 解成 PCM。实测 `tea-time`（暂停曲）在每次进曲的 precache 里整首解码要 367ms，
+	 * 而它只在玩家按暂停时才用得上。流式对 Vorbis 只需建立环形缓冲（~1ms），
+	 * 播放时由 VorbisFile 喂；非 Vorbis 格式 streamSongAudio 内部会自动回退全解。
+	 */
+	public static function returnSound(path:String, key:String, ?library:String, ?forceStream:Bool = false) {
 		#if MODS_ALLOWED
 		var file:String = modsSounds(path, key);
 		if(FileSystem.exists(file)) {
 			if(!currentTrackedSounds.exists(file)) {
-				currentTrackedSounds.set(file, (path == 'songs') ? streamSongAudio(file) : Sound.fromFile(file));
+				currentTrackedSounds.set(file, (path == 'songs' || forceStream) ? streamSongAudio(file) : Sound.fromFile(file));
 			}
 			localTrackedAssets.push(key);
 			return currentTrackedSounds.get(file);
@@ -1061,7 +1075,7 @@ class Paths
 			if(!haxe.io.Path.isAbsolute(fileToLoad)) fileToLoad = './' + fileToLoad;
 			if(FileSystem.exists(fileToLoad))
 			{
-				currentTrackedSounds.set(gottenPath, (path == 'songs') ? streamSongAudio(fileToLoad) : Sound.fromFile(fileToLoad));
+				currentTrackedSounds.set(gottenPath, (path == 'songs' || forceStream) ? streamSongAudio(fileToLoad) : Sound.fromFile(fileToLoad));
 			}
 			else
 			{

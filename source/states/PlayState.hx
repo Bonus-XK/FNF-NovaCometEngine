@@ -647,8 +647,8 @@ class PlayState extends MusicBeatState
 	/** 游玩中按返回键 / 左上角 X 后，在 update 末尾统一转成暂停（不退出游戏） */
 	private var androidBackQueued:Bool = false;
 
-	/** LoadProbe：首帧打点只做一次（结束加载时间线） */
-	private var _loadProbeFrameDone:Bool = false;
+	/** LoadProbe：第几帧了（第 2 帧收尾，好把首次 draw 圈进时间线） */
+	private var _loadProbeFrame:Int = 0;
 
 	override public function create()
 	{
@@ -1254,6 +1254,7 @@ class PlayState extends MusicBeatState
 		for (key => type in precacheList)
 		{
 			//trace('Key $key is type $type');
+			if (LoadProbe.active()) LoadProbe.markIR('precache', 0, key);
 			switch(type)
 			{
 				case 'image':
@@ -1261,7 +1262,8 @@ class PlayState extends MusicBeatState
 				case 'sound':
 					Paths.sound(key);
 				case 'music':
-					Paths.music(key);
+					// 暂停曲：流式预热（整首解码实测 367ms，见 Paths.returnSound 的 forceStream）
+					Paths.musicStreamed(key);
 			}
 		}
 
@@ -2598,12 +2600,17 @@ class PlayState extends MusicBeatState
 
 	override public function update(elapsed:Float)
 	{
-		// 加载时间线收尾：create 后的第一帧（含首次绘制提交）—— 这才是玩家感知的"加载结束"
-		if (!_loadProbeFrameDone)
+		// 加载时间线：第一帧只打点，第二帧才收尾 —— 中间夹着**首次 draw**（贴图首提交 +
+		// 着色器首编译），那才是玩家感知的"看到画面"的最后一段，不能漏在时间线之外。
+		if (_loadProbeFrame < 2)
 		{
-			_loadProbeFrameDone = true;
-			LoadProbe.mark('play:frame-1');
-			LoadProbe.end();
+			_loadProbeFrame++;
+			if (_loadProbeFrame == 1) LoadProbe.mark('play:frame-1');
+			else
+			{
+				LoadProbe.mark('play:frame-2');
+				LoadProbe.end();
+			}
 		}
 		// 大纹理 CPU 副本的周期性兜底释放（默认关闭时 no-op）
 		backend.GfxPolicy.onPlayUpdate(elapsed);
@@ -2624,6 +2631,22 @@ class PlayState extends MusicBeatState
 		var _dT0:Float = backend.MeteoricProfile.tickNow();
 		super.draw();
 		backend.MeteoricProfile.phaseAdd('draw', backend.MeteoricProfile.tickNow() - _dT0);
+	}
+	#else
+	/**
+	 * 首帧绘制探针（仅 METEORIC_LOADPROBE=1）：进曲后第一帧的 draw 是「加载完到能看见画面」
+	 * 的最后一段，里面是全部贴图的首次 GL 提交 + 着色器首次编译。不单独量就分不清它和 create。
+	 */
+	override public function draw():Void
+	{
+		if (LoadProbe.active())
+		{
+			LoadProbe.mark('draw:begin');
+			super.draw();
+			LoadProbe.mark('draw:end');
+			return;
+		}
+		super.draw();
 	}
 	#end
 
