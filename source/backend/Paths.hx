@@ -249,7 +249,7 @@ class Paths
 			var _t0:Float = haxe.Timer.stamp();
 			try
 			{
-				var bmp:BitmapData = BitmapData.fromFile(file);
+				var bmp:BitmapData = decodeImageFile(file);
 				if (bmp != null)
 				{
 					if (pendingBitmaps.exists(file))
@@ -265,6 +265,218 @@ class Paths
 			LoadProbe.markIR('img:decode ms', Std.int((haxe.Timer.stamp() - _t0) * 1000), file);
 			n++;
 		}
+	}
+
+	// ===== 解码结果磁盘缓存 =====
+	// 进曲最大的一块是 PNG 解码（8192² 实测 397ms），而同样的像素**读回**只要 ~30ms
+	// （268MB 顺序读实测 26ms）。所以把解码产物按文件落到磁盘：第二次进同一首直接读回。
+	// 文件布局：24B 头（magic / w / h / 源大小 / 源 mtime / 保留）+ 原始 BGRA premultiplied 像素。
+	// 像素字节与 `BitmapData.fromFile` 的产物逐字节一致（lime 解码后就是 BGRA32+premultiplied），
+	// 读回时 `Uint8Array.fromBytes(bytes, 24, w*h*4)` 零拷贝包成 ImageBuffer，不走任何格式转换、
+	// 也不重跑 premultiply（那两趟各要一整遍内存带宽）。
+	// 关掉：环境变量 METEORIC_NO_IMGCACHE=1（A/B 对照用）。缓存目录不可写时全程静默跳过。
+	static inline var IMG_CACHE_MAGIC:Int = 0x494D4742; // 'IMGB'
+	static inline var IMG_CACHE_HEADER:Int = 24;
+	// 小于这个像素数不缓存：解码本来就只要几毫秒，缓存反而多一次 IO
+	static inline var IMG_CACHE_MIN_PIXELS:Int = 512 * 512;
+	// 缓存上限（MB），超了按 mtime 淘汰最旧的一批
+	static inline var IMG_CACHE_MAX_MB:Int = 2048;
+
+	static var _imgCacheDir:String = null;
+	static var _imgCacheDirTried:Bool = false;
+	static var _imgCacheSaveCount:Int = 0;
+
+	static function imgCacheOff():Bool
+	{
+		#if sys
+		try
+		{
+			return Sys.getEnv('METEORIC_NO_IMGCACHE') == '1';
+		}
+		catch (e:Dynamic) {}
+		#end
+		return false;
+	}
+
+	/** 缓存目录（与谱面簇缓存同级，`<storage>/imgcache`）；建不出来返回 null。 */
+	static function imgCacheDir():String
+	{
+		if (_imgCacheDirTried) return _imgCacheDir;
+		_imgCacheDirTried = true;
+		#if sys
+		var candidates:Array<String> = [];
+		try
+		{
+			var storage:String = lime.system.System.applicationStorageDirectory;
+			if (storage != null && storage.length > 0) candidates.push(storage + '/imgcache');
+		}
+		catch (e:Dynamic) {}
+		try
+		{
+			candidates.push(haxe.io.Path.directory(Sys.programPath()) + '/imgcache');
+		}
+		catch (e2:Dynamic) {}
+		for (c in candidates)
+		{
+			try
+			{
+				if (!FileSystem.exists(c)) FileSystem.createDirectory(c);
+				if (FileSystem.exists(c)) { _imgCacheDir = c; break; }
+			}
+			catch (e2:Dynamic) {}
+		}
+		#end
+		return _imgCacheDir;
+	}
+
+	/** 缓存键：路径 + 源文件大小 + mtime（任一变化即失效，改图不会读到旧像素）。 */
+	static function imgCacheKey(file:String):String
+	{
+		#if sys
+		try
+		{
+			var st = FileSystem.stat(file);
+			var h:Int = -2128831035; // FNV-1a offset
+			var addTo = function(v:Int)
+			{
+				h = (h ^ (v & 0xFF)) * 16777619;
+				h = (h ^ ((v >> 8) & 0xFF)) * 16777619;
+				h = (h ^ ((v >> 16) & 0xFF)) * 16777619;
+				h = (h ^ ((v >> 24) & 0xFF)) * 16777619;
+			}
+			addTo(st.size);
+			addTo(Std.int(st.mtime.getTime() / 1000));
+			var n:Int = file.length;
+			for (i in 0...n) addTo(file.charCodeAt(i));
+			return StringTools.hex(h, 8);
+		}
+		catch (e:Dynamic) { return null; }
+		#else
+		return null;
+		#end
+	}
+
+	/**
+	 * 图片解码统一入口：先查磁盘缓存，未命中才真解码并把结果写回缓存。
+	 * 返回值语义与 `BitmapData.fromFile` 一致（失败为 null）。
+	 */
+	public static function decodeImageFile(file:String):BitmapData
+	{
+		var bmp:BitmapData = null;
+		try { bmp = imgCacheRead(file); } catch (e:Dynamic) { bmp = null; }
+		if (bmp != null)
+		{
+			LoadProbe.mark('img:cache-hit');
+			return bmp;
+		}
+		bmp = BitmapData.fromFile(file);
+		if (bmp != null)
+		{
+			LoadProbe.mark('img:cache-miss');
+			try { imgCacheWrite(file, bmp); } catch (e:Dynamic) {}
+		}
+		return bmp;
+	}
+
+	static function imgCacheRead(file:String):BitmapData
+	{
+		#if sys
+		if (imgCacheOff()) return null;
+		var dir:String = imgCacheDir();
+		if (dir == null) return null;
+		var key:String = imgCacheKey(file);
+		if (key == null) return null;
+		var path:String = dir + '/' + key + '.raw';
+		if (!FileSystem.exists(path)) return null;
+		var bytes:haxe.io.Bytes = sys.io.File.getBytes(path);
+		if (bytes.length < IMG_CACHE_HEADER) return null;
+		if (bytes.getInt32(0) != IMG_CACHE_MAGIC) return null;
+		var w:Int = bytes.getInt32(4);
+		var h:Int = bytes.getInt32(8);
+		if (w <= 0 || h <= 0 || w > 32768 || h > 32768) return null;
+		var need:Int = w * h * 4;
+		if (bytes.length < IMG_CACHE_HEADER + need) return null;
+		var u8:lime.utils.UInt8Array = lime.utils.UInt8Array.fromBytes(bytes, IMG_CACHE_HEADER, need);
+		var buf:lime.graphics.ImageBuffer = new lime.graphics.ImageBuffer(u8, w, h, 32, lime.graphics.PixelFormat.BGRA32);
+		buf.premultiplied = true;
+		buf.transparent = true;
+		var img:lime.graphics.Image = new lime.graphics.Image(buf);
+		return openfl.display.BitmapData.fromImage(img);
+		#else
+		return null;
+		#end
+	}
+
+	static function imgCacheWrite(file:String, bmp:BitmapData):Void
+	{
+		#if sys
+		if (imgCacheOff()) return;
+		if (bmp == null || bmp.image == null || bmp.image.buffer == null) return;
+		var w:Int = bmp.width;
+		var h:Int = bmp.height;
+		if (w <= 0 || h <= 0 || w * h < IMG_CACHE_MIN_PIXELS) return;
+		var need:Int = w * h * 4;
+		var u8:lime.utils.UInt8Array = bmp.image.buffer.data;
+		if (u8 == null || u8.length < need) return;
+		var dir:String = imgCacheDir();
+		if (dir == null) return;
+		var key:String = imgCacheKey(file);
+		if (key == null) return;
+		var st = FileSystem.stat(file);
+		var header:haxe.io.Bytes = haxe.io.Bytes.alloc(IMG_CACHE_HEADER);
+		header.setInt32(0, IMG_CACHE_MAGIC);
+		header.setInt32(4, w);
+		header.setInt32(8, h);
+		header.setInt32(12, st.size);
+		header.setInt32(16, Std.int(st.mtime.getTime() / 1000));
+		var path:String = dir + '/' + key + '.raw';
+		var out = sys.io.File.write(path, true);
+		try
+		{
+			out.write(header);
+			out.writeBytes(u8.toBytes(), 0, need);
+		}
+		catch (e:Dynamic) {}
+		try { out.close(); } catch (e:Dynamic) {}
+		_imgCacheSaveCount++;
+		if ((_imgCacheSaveCount & 7) == 0) imgCachePrune(dir);
+		#end
+	}
+
+	/** 缓存超过上限时按 mtime 删掉最旧的一半（只在写入若干次后触发，不占热路径）。 */
+	static function imgCachePrune(dir:String):Void
+	{
+		#if sys
+		try
+		{
+			var files:Array<String> = FileSystem.readDirectory(dir);
+			var entries:Array<Array<Dynamic>> = [];
+			var total:Int = 0;
+			for (f in files)
+			{
+				if (!f.endsWith('.raw')) continue;
+				try
+				{
+					var st = FileSystem.stat(dir + '/' + f);
+					total += st.size;
+					entries.push([dir + '/' + f, st.mtime.getTime(), st.size]);
+				}
+				catch (e:Dynamic) {}
+			}
+			// ⚠ 必须用 Float 算：2048 * 1048576 = 2^31，Int32 正好溢出成负数，
+			//   淘汰阈值变负 → 刚写进来的缓存会被整目录删光（第一版就踩了这个坑）。
+			var limit:Float = IMG_CACHE_MAX_MB * 1048576.0;
+			if (total <= limit) return;
+			entries.sort(function(a:Array<Dynamic>, b:Array<Dynamic>) return (a[1] < b[1]) ? -1 : (a[1] > b[1] ? 1 : 0));
+			var target:Float = limit * 0.5;
+			for (e in entries)
+			{
+				if (total <= target) break;
+				try { FileSystem.deleteFile(e[0]); total -= Std.int(e[2]); } catch (e2:Dynamic) {}
+			}
+		}
+		catch (e:Dynamic) {}
+		#end
 	}
 
 	/** 解码出的位图尺寸（读缓存里的 BitmapData，失败返回 '?'） */
@@ -593,7 +805,7 @@ class Paths
 			}
 			if (FileSystem.exists(file))
 			{
-				var bd2:BitmapData = BitmapData.fromFile(file);
+				var bd2:BitmapData = decodeImageFile(file);
 				if (bd2 != null) return FlxGraphic.fromBitmapData(bd2);
 			}
 		}
@@ -632,7 +844,7 @@ class Paths
 			pendingHit = true;
 		}
 		else if (FileSystem.exists(file))
-			bitmap = BitmapData.fromFile(file);
+			bitmap = decodeImageFile(file);
 		else
 		#end
 		{
@@ -656,7 +868,7 @@ class Paths
 			else if (OpenFlAssets.exists(file, IMAGE))
 				bitmap = OpenFlAssets.getBitmapData(file);
 			else if (FileSystem.exists(file))
-				bitmap = BitmapData.fromFile(file);
+				bitmap = decodeImageFile(file);
 			// 兜底：lime 库前缀 id（shared:assets/shared/...）解析失败时，
 			// 尝试无前缀完整路径（manifest 的 id 是不带前缀的 assets/shared/images/...）
 			if (bitmap == null)
