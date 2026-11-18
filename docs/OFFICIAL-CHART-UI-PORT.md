@@ -34,6 +34,8 @@
 - 真实歌曲加载：`--meteoric-song=<song>` + `--meteoric-editor=chartui`，或 `METEORIC_UI_SONG=<song>`；
   不再只能用空 `Test` 谱。
 - 逐小节 BPM 的 step 坐标：音符/网格按 `stepAtTime/timeAtStep` 对齐，变速段不再错位。
+- 吸附步长修正：`1/16` = 1 step（此前误算成 4 step/四分音符，点击会跳 160px）；鼠标位置
+  现在有半透明落点预览，点击落点与光标基本重合。
 - 右侧 `Section / Events` 面板：BPM ±、MustHit、Add/Remove Section、Event Type、Add/Del Event。
 - 打开谱面：左侧 `Song folder` 输入框 + Open，或 `Ctrl+O`；支持当前难度后缀与模组数据目录。
 - 事件值：选中事件后，右侧 `Event Value 1/2` 直接编辑。
@@ -78,3 +80,5 @@ METEORIC_SAVE_DIR=/tmp/meteoric-chartui ./Meteoric --meteoric-editor=chartui
 - 已验证：`ESC` 进入 `EditorPlayState` 试玩并返回编辑器；`Ctrl+O` 打开 `fresh`（42 小节 / 238 音符），
   `Ctrl+S` 保存为合法 `psych_v1`。
 - 未验证：面板按钮的真实鼠标命中（注入坐标与窗口缩放不一致）、事件输入框的真实键盘输入。
+- 已修正“鼠标大偏移”：根因是 `snapTime` 把 `1/16` 算成每 4 step 一档（应每 1 step），
+  加上落点预览；点击 1.7 step 处现在落点偏差约 9px，不再跳到播放头。

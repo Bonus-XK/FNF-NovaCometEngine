@@ -139,6 +139,7 @@ class OfficialChartEditorState extends MusicBeatState
 	var selectedNote:EditorNote = null;
 	var selectedEvent:Dynamic = null;
 	var selectedRect:FlxSprite;
+	var previewNote:FlxSprite;
 	var songInput:FlxInputText;
 	var eventValue1:FlxInputText;
 	var eventValue2:FlxInputText;
@@ -300,6 +301,12 @@ class OfficialChartEditorState extends MusicBeatState
 		selectedRect.visible = false;
 		selectedRect.scrollFactor.set();
 		add(selectedRect);
+
+		previewNote = new FlxSprite(0, 0).makeGraphic(GRID_SIZE - 6, GRID_SIZE - 6, 0xFFFFFFFF);
+		previewNote.alpha = 0.35;
+		previewNote.visible = false;
+		previewNote.scrollFactor.set();
+		add(previewNote);
 
 		buildChrome();
 		buildPlaybar();
@@ -967,7 +974,7 @@ class OfficialChartEditorState extends MusicBeatState
 
 	function updateInput(elapsed:Float):Void
 	{
-		var mouse:FlxPoint = FlxG.mouse.getScreenPosition(cameras[0], FlxPoint.get());
+		var mouse:FlxPoint = FlxG.mouse.getPositionInCameraView(FlxG.camera, FlxPoint.get());
 		var top:Float = MENU_BAR_HEIGHT + GRID_TOP_PAD;
 		var bottom:Float = FlxG.height - PLAYBAR_HEIGHT;
 
@@ -1017,6 +1024,33 @@ class OfficialChartEditorState extends MusicBeatState
 		if ((songInput != null && songInput.hasFocus) || (eventValue1 != null && eventValue1.hasFocus) || (eventValue2 != null && eventValue2.hasFocus))
 			return;
 
+		// 吸附预览：鼠标下方的虚影落在实际会放置的 step 上，避免“点这里、音符飞到那里”的错觉
+		var overGrid:Bool = mouse.y > top && mouse.y < bottom && mouse.x >= EVENT_X && mouse.x <= EVENT_X + GRID_SIZE * (LANES + 1);
+		if (overGrid && previewNote != null)
+		{
+			var curStepF:Float = stepAtTime(Conductor.songPosition);
+			var pTime:Float = snapTime(timeAtStep(curStepF + (mouse.y - PLAY_Y) / (GRID_SIZE * zoom)));
+			var pY:Float = PLAY_Y + (stepAtTime(pTime) - curStepF) * GRID_SIZE * zoom;
+			previewNote.visible = true;
+			previewNote.y = pY - GRID_SIZE / 2;
+			if (mouse.x < EVENT_X + GRID_SIZE)
+			{
+				previewNote.x = EVENT_X + 8;
+				previewNote.setGraphicSize(GRID_SIZE - 16, 14);
+				previewNote.updateHitbox();
+				previewNote.color = 0xFF222222;
+			}
+			else
+			{
+				var pLane:Int = Std.int((mouse.x - EVENT_X) / GRID_SIZE) - 1;
+				previewNote.x = EVENT_X + GRID_SIZE + pLane * GRID_SIZE + 3;
+				previewNote.setGraphicSize(GRID_SIZE - 6, GRID_SIZE - 6);
+				previewNote.updateHitbox();
+				previewNote.color = LANE_COLORS[pLane % 4];
+			}
+		}
+		else if (previewNote != null) previewNote.visible = false;
+
 		if (FlxG.mouse.wheel != 0 && mouse.y > top && mouse.y < bottom)
 		{
 			if (FlxG.sound.music == null) return;
@@ -1038,6 +1072,7 @@ class OfficialChartEditorState extends MusicBeatState
 		{
 			var lane:Int = Std.int((mouse.x - EVENT_X) / GRID_SIZE) - 1;
 			var time:Float = snapTime(timeAtStep(stepAtTime(Conductor.songPosition) + (mouse.y - PLAY_Y) / (GRID_SIZE * zoom)));
+			// 吸附后的落点由 previewNote 显示，不在此处打日志（避免每点一次刷屏）
 			var existing:EditorNote = findNote(time, lane);
 			if (existing != null)
 			{
@@ -1053,6 +1088,7 @@ class OfficialChartEditorState extends MusicBeatState
 		{
 			var lane:Int = Std.int((mouse.x - EVENT_X) / GRID_SIZE) - 1;
 			var time:Float = snapTime(timeAtStep(stepAtTime(Conductor.songPosition) + (mouse.y - PLAY_Y) / (GRID_SIZE * zoom)));
+			// 吸附后的落点由 previewNote 显示，不在此处打日志（避免每点一次刷屏）
 			var existing:EditorNote = findNote(time, lane);
 			if (existing != null) deleteNote(existing);
 		}
@@ -1427,8 +1463,10 @@ class OfficialChartEditorState extends MusicBeatState
 
 	function snapTime(t:Float):Float
 	{
-		var q:Float = snaps[snapIndex] / 4;
-		return timeAtStep(Math.floor(stepAtTime(t) / q) * q);
+		// 标签是音符时值：1/16 = 每拍 4 个 step 中的 1 个，因此步长 = 16 / 分母。
+		// 之前写成分母/4，1/16 实际变成每 4 step（四分音符）一档，点击会跳 160px。
+		var q:Float = 16.0 / snaps[snapIndex];
+		return timeAtStep(Math.floor(stepAtTime(t) / q + 0.5) * q);
 	}
 
 	function recalculateSections():Void
