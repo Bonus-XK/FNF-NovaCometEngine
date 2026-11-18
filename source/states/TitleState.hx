@@ -215,7 +215,7 @@ class TitleState extends MusicBeatState
 		#elseif CHARTING
 		bridge.EditorBridge.openChartEditor();
 		#else
-		if(FlxG.save.data.flashing == null && !FlashingState.leftState) {
+		if(FlxG.save.data.flashing == null && !FlashingState.leftState && backend.DebugLaunch.autoEditor == null) {
 			MusicBeatState.switchState(new FlashingState());
 		} else {
 			if (initialized)
@@ -529,6 +529,14 @@ class TitleState extends MusicBeatState
 				bridge.LuaGraphBridge.openEditor();
 				return;
 			}
+		}
+
+		// 调试直进「官方 UI」编谱器：MainMenuState 可能被模组脚本重定向（TCM），从标题页直达。
+		if (backend.DebugLaunch.autoEditor == 'chartui' || backend.DebugLaunch.autoEditor == 'official')
+		{
+			backend.DebugLaunch.autoEditor = null;
+			MusicBeatState.switchState(new states.editors.OfficialChartEditorState());
+			return;
 		}
 
 		if (FlxG.sound.music != null)

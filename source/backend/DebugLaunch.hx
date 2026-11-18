@@ -6,7 +6,7 @@ package backend;
  *   --meteoric-song=<song>   直进指定曲目（Freeplay 歌单名，大小写不敏感）
  *   --meteoric-diff=<0..n>   难度索引（缺省用 Freeplay 当前档）
  *   --meteoric-botplay       开局 botplay（cpuControlled，免输入自动游玩，不记分不录回放）
- *   --meteoric-editor=<id>   直进编辑器（目前支持 choreo=演出编排；主菜单出现后自动进入）
+ *   --meteoric-editor=<id>   直进编辑器（chartui/official=官方 UI 谱面编辑器 / choreo=演出编排；主菜单出现后自动进入）
  *
  * 用途：真机自检 / 回归验证，绕开菜单导航。产物在 Main.new 里解析。
  */
