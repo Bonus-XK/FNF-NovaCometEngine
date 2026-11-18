@@ -36,6 +36,9 @@
 - 逐小节 BPM 的 step 坐标：音符/网格按 `stepAtTime/timeAtStep` 对齐，变速段不再错位。
 - 吸附步长修正：`1/16` = 1 step（此前误算成 4 step/四分音符，点击会跳 160px）；鼠标位置
   现在有半透明落点预览，点击落点与光标基本重合。
+- 真实音符素材：使用 `noteSkins/NOTE_assets-063`（已上色的四色箭头 + hold piece），
+  不再默认画彩色方块；图集加载失败才回退方块。
+- 删除：右键音符、`E` 橡皮擦后左键、选中后 `Del` 三种方式；`Ctrl+D` 取消选中。
 - 右侧 `Section / Events` 面板：BPM ±、MustHit、Add/Remove Section、Event Type、Add/Del Event。
 - 打开谱面：左侧 `Song folder` 输入框 + Open，或 `Ctrl+O`；支持当前难度后缀与模组数据目录。
 - 事件值：选中事件后，右侧 `Event Value 1/2` 直接编辑。
@@ -65,6 +68,7 @@ METEORIC_SAVE_DIR=/tmp/meteoric-chartui ./Meteoric --meteoric-editor=chartui
   还没接到这套新界面。
 - 事件只能加默认事件名，值 1/值 2 还没有输入框；BPM 只能 ±5，不能直接输入。
 - 音符长条只能按 step 调整，不能拖拽拉长。
+- 真实 note 素材采用 0.6.3 原生皮肤；`NOTE_assets` 是 RGB 掩码，直接画会变红/怪色，未采用。
 - 官方资源（图标、字体 Inconsolata、对话框 XML）是 proprietary，未复制进仓库。
 - 官方编辑器支持变奏/难度/时间变化等 `SongData` 结构；本实现只映射 Psych 的 section/note。
 

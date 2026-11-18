@@ -11,6 +11,7 @@ import backend.Song;
 
 import flixel.FlxG;
 import flixel.addons.ui.FlxInputText;
+import flixel.graphics.frames.FlxAtlasFrames;
 import flixel.FlxSprite;
 import flixel.FlxState;
 import flixel.group.FlxGroup.FlxTypedGroup;
@@ -139,6 +140,8 @@ class OfficialChartEditorState extends MusicBeatState
 	var selectedNote:EditorNote = null;
 	var selectedEvent:Dynamic = null;
 	var selectedRect:FlxSprite;
+	var noteAtlas:FlxAtlasFrames;
+	var eraserMode:Bool = false;
 	var previewNote:FlxSprite;
 	var songInput:FlxInputText;
 	var eventValue1:FlxInputText;
@@ -267,6 +270,17 @@ class OfficialChartEditorState extends MusicBeatState
 			measureLabels.add(label);
 		}
 
+		try
+		{
+			// 0.6.3 原生皮肤是已上色的四色箭头；默认 NOTE_assets 是 RGB 掩码，直接画会变红/怪色。
+			noteAtlas = Paths.getSparrowAtlas('noteSkins/NOTE_assets-063');
+		}
+		catch (e:Dynamic)
+		{
+			noteAtlas = null;
+			trace('[OfficialChartEditor] note atlas load failed: ' + e);
+		}
+
 		eventSprites = new FlxTypedGroup<FlxSprite>();
 		add(eventSprites);
 		for (i in 0...48)
@@ -284,10 +298,12 @@ class OfficialChartEditorState extends MusicBeatState
 		for (i in 0...160)
 		{
 			var hs:FlxSprite = new FlxSprite(0, 0).makeGraphic(10, 10, 0xFFFFFFFF);
+			if (noteAtlas != null) hs.frames = noteAtlas;
 			hs.visible = false;
 			hs.scrollFactor.set();
 			holdSprites.add(hs);
 			var ns:FlxSprite = new FlxSprite(0, 0).makeGraphic(GRID_SIZE - 6, GRID_SIZE - 6, 0xFFFFFFFF);
+			if (noteAtlas != null) ns.frames = noteAtlas;
 			ns.visible = false;
 			ns.scrollFactor.set();
 			noteSprites.add(ns);
@@ -510,7 +526,7 @@ class OfficialChartEditorState extends MusicBeatState
 		eventValue2.fieldBorderColor = 0xFF999999;
 		eventValue2.callback = function(text:String, action:String) applyEventValue(2, text);
 		add(eventValue2);
-		var hint:FlxText = makeText(px + 12, py + 430, 0, 'Ctrl+Z/Y  ESC playtest  Bksp menu', 10, 0xFF555555, LEFT, 'future.ttf');
+		var hint:FlxText = makeText(px + 12, py + 430, 0, 'E eraser  Del note  Ctrl+Z/Y  Bksp menu', 10, 0xFF555555, LEFT, 'future.ttf');
 		add(hint);
 	}
 
@@ -916,7 +932,20 @@ class OfficialChartEditorState extends MusicBeatState
 			spr.visible = true;
 			spr.x = EVENT_X + GRID_SIZE + (n.data % LANES) * GRID_SIZE + 3;
 			spr.y = y - GRID_SIZE / 2;
-			spr.color = LANE_COLORS[n.data % 4];
+			if (noteAtlas != null)
+			{
+				var skin:String = ['purple', 'blue', 'green', 'red'][n.data % 4];
+				var frame = noteAtlas.getByName(skin + '0000');
+				if (frame != null)
+				{
+					spr.frame = frame;
+					spr.setGraphicSize(GRID_SIZE - 4, GRID_SIZE - 4);
+					spr.updateHitbox();
+					spr.color = 0xFFFFFFFF;
+				}
+				else spr.color = LANE_COLORS[n.data % 4];
+			}
+			else spr.color = LANE_COLORS[n.data % 4];
 			spr.alpha = n.data >= ExtraKeys.songKeys ? 0.7 : 1;
 			noteIndex++;
 
@@ -926,10 +955,23 @@ class OfficialChartEditorState extends MusicBeatState
 				h.visible = true;
 				h.x = spr.x + 14;
 				h.y = spr.y + GRID_SIZE - 6;
-				h.setGraphicSize(10, Std.int(Math.max(2, (stepAtTime(n.time + n.sus) - stepAtTime(n.time)) * GRID_SIZE * zoom)));
+				h.setGraphicSize(12, Std.int(Math.max(2, (stepAtTime(n.time + n.sus) - stepAtTime(n.time)) * GRID_SIZE * zoom)));
 				h.updateHitbox();
-				h.color = LANE_COLORS[n.data % 4];
-				h.alpha = 0.5;
+				if (noteAtlas != null)
+				{
+					var skin:String = ['purple', 'blue', 'green', 'red'][n.data % 4];
+					var hf = noteAtlas.getByName(skin + ' hold piece0000');
+					if (hf != null)
+					{
+						h.frame = hf;
+						h.setGraphicSize(12, Std.int(Math.max(2, (stepAtTime(n.time + n.sus) - stepAtTime(n.time)) * GRID_SIZE * zoom)));
+						h.updateHitbox();
+						h.color = 0xFFFFFFFF;
+					}
+					else h.color = LANE_COLORS[n.data % 4];
+				}
+				else h.color = LANE_COLORS[n.data % 4];
+				h.alpha = 0.9;
 				holdIndex++;
 			}
 		}
@@ -1076,10 +1118,14 @@ class OfficialChartEditorState extends MusicBeatState
 			var existing:EditorNote = findNote(time, lane);
 			if (existing != null)
 			{
-				selectedNote = existing;
-				status('Selected ' + Std.int(existing.time) + 'ms lane ' + lane + ' hold ' + Std.int(existing.sus));
+				if (eraserMode) deleteNote(existing);
+				else
+				{
+					selectedNote = existing;
+					status('Selected ' + Std.int(existing.time) + 'ms lane ' + lane + ' hold ' + Std.int(existing.sus));
+				}
 			}
-			else
+			else if (!eraserMode)
 			{
 				addNote(time, lane);
 			}
@@ -1115,6 +1161,17 @@ class OfficialChartEditorState extends MusicBeatState
 		if (FlxG.keys.pressed.CONTROL && FlxG.keys.justPressed.Y) redoEdit();
 		if (FlxG.keys.pressed.CONTROL && FlxG.keys.justPressed.S) saveChart();
 		if (FlxG.keys.pressed.CONTROL && FlxG.keys.justPressed.O) focusSongInput();
+		if (FlxG.keys.justPressed.E)
+		{
+			eraserMode = !eraserMode;
+			status(eraserMode ? 'Eraser ON (click note)' : 'Eraser OFF');
+		}
+		if (FlxG.keys.justPressed.DELETE && selectedNote != null) deleteSelectedNote();
+		if (FlxG.keys.pressed.CONTROL && FlxG.keys.justPressed.D)
+		{
+			selectedNote = null;
+			status('Selection cleared');
+		}
 		if (FlxG.keys.justPressed.LBRACKET && sectionStarts.length > 0)
 		{
 			var sec:Int = sectionForTime(Conductor.songPosition);
@@ -1209,6 +1266,7 @@ class OfficialChartEditorState extends MusicBeatState
 	function deleteNote(n:EditorNote):Void
 	{
 		pushUndo();
+		if (selectedNote == n) selectedNote = null;
 		var sec:Int = sectionForTime(n.time);
 		for (i in _song.notes[sec].sectionNotes)
 		{
