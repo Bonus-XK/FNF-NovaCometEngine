@@ -358,7 +358,11 @@ class MasterEditorMenu extends MusicBeatState
 		switch (optionShit[curSelected][0])
 		{
 			case 'chart':
-				LoadingState.loadAndSwitchState(new ChartingState(), false);
+				// 默认官方 UI 编谱器；经典版可通过 Help 菜单或存档位回退。
+				if (bridge.EditorBridge.classicEditorRequested || FlxG.save.data.classicChartEditor == true)
+					LoadingState.loadAndSwitchState(new ChartingState(), false);
+				else
+					LoadingState.loadAndSwitchState(new OfficialChartEditorState(), false);
 			case 'character':
 				LoadingState.loadAndSwitchState(new CharacterEditorState(Character.DEFAULT_CHARACTER, false));
 			case 'week':

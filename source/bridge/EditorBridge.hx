@@ -6,9 +6,17 @@ package bridge;
  *  可复核：python3 tools/boundary/editor_census.py → 主流程 import 编辑器类 5 → 0。 */
 class EditorBridge
 {
-	/** 打开编谱器（原 TitleState:193 / NoteChartDomain:116 的 `new ChartingState()`）。 */
+	/** 本次会话请求经典编谱器（官方 UI 版 Help → Classic Editor 设置）。 */
+	public static var classicEditorRequested:Bool = false;
+
+	/** 打开编谱器：默认官方 UI 版；经典版仍可通过 Help 菜单/存档位回退。 */
 	public static function openChartEditor():Void
-		backend.MusicBeatState.switchState(new states.editors.ChartingState());
+	{
+		if (classicEditorRequested || flixel.FlxG.save.data.classicChartEditor == true)
+			backend.MusicBeatState.switchState(new states.editors.ChartingState());
+		else
+			backend.MusicBeatState.switchState(new states.editors.OfficialChartEditorState());
+	}
 
 	/** 打开人物编辑器（原 PlayState:2193 的 `new CharacterEditorState(SONG.player2)`）。 */
 	public static function openCharacterEditor(character:String):Void

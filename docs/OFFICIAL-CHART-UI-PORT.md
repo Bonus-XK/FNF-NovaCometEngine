@@ -13,7 +13,7 @@
   `FlxSpriteContainer` 缺失）。因此这里只移植 **UI 结构/布局/视觉**，用原生 Flixel 实现，
   不引入 HaxeUI、funkin 核心或官方资源。
 
-## 已实现（阶段 1）
+## 已实现（阶段 1.1）
 
 | 官方 UI | 本实现 |
 |---|---|
@@ -25,8 +25,21 @@
 | 节拍/小节分割线 | 每个 step / beat / measure 三级线宽与颜色 |
 | 音符/长条 | 按轨道颜色绘制，时间随播放头滚动 |
 
-数据仍为 Psych `SwagSong`；保存输出 `psych_v1` JSON，桌面端可直接写回
-`mods/<mod>/data/<song>/<song>-<diff>.json` 并删除旧 `.mec`。
+数据仍为 Psych `SwagSong`；保存输出 `psych_v1` JSON，桌面端写回
+`mods/data/<song>/<song>-<diff>.json`（仅当当前模组已有该曲目录时才写当前模组），
+并删除旧 `.mec`。
+
+补充可用能力：
+
+- 真实歌曲加载：`--meteoric-song=<song>` + `--meteoric-editor=chartui`，或 `METEORIC_UI_SONG=<song>`；
+  不再只能用空 `Test` 谱。
+- 逐小节 BPM 的 step 坐标：音符/网格按 `stepAtTime/timeAtStep` 对齐，变速段不再错位。
+- 右侧 `Section / Events` 面板：BPM ±、MustHit、Add/Remove Section、Event Type、Add/Del Event。
+- 撤销/重做：`Ctrl+Z / Ctrl+Y`，最多 40 步；覆盖音符、小节、BPM、事件编辑。
+- 音符选中/长条/类型：左键选中，`Hold -/+` 调整长条，`Cycle Type` 切换类型，`Delete Note` 删除。
+- `ESC` 试玩（`EditorPlayState`），`Backspace` 返回编辑器菜单。
+- 入口改为默认：`EditorBridge.openChartEditor()` / 编辑器菜单的「编谱器」默认进官方 UI 版；
+  Help → `Classic Editor` 可切回旧版（本次会话有效；存档位 `classicChartEditor=true` 也可回退）。
 
 ## 入口
 
@@ -43,9 +56,11 @@ METEORIC_SAVE_DIR=/tmp/meteoric-chartui ./Meteoric --meteoric-editor=chartui
 
 - 没有引入 HaxeUI，因此菜单/工具箱是原生 Flixel 重绘，不是官方 HaxeUI 控件树。
 - 官方完整工具箱（Metadata / Difficulty / Offsets / Freeplay / Playtest properties / 角色预览）
-  只做了 Notes 一个，其余待继续。
-- 右键/左键语义目前是「左键放置、右键删除」；官方的框选、Ctrl 多选、剪贴板、撤销/重做
-  UI 还没接到这套新界面。
+  只做了 Notes + Section/Events，其余待继续。
+- 左键在空网格放置音符、在已有音符上选中；右键删除。官方的框选、Ctrl 多选、剪贴板
+  还没接到这套新界面。
+- 事件只能加默认事件名，值 1/值 2 还没有输入框；BPM 只能 ±5，不能直接输入。
+- 音符长条只能按 step 调整，不能拖拽拉长。
 - 官方资源（图标、字体 Inconsolata、对话框 XML）是 proprietary，未复制进仓库。
 - 官方编辑器支持变奏/难度/时间变化等 `SongData` 结构；本实现只映射 Psych 的 section/note。
 
@@ -56,4 +71,7 @@ METEORIC_SAVE_DIR=/tmp/meteoric-chartui ./Meteoric --meteoric-editor=chartui
 - 真机启动 `--meteoric-editor=chartui`，日志确认
   `[OfficialChartEditor] create ...` / `first frame ...`；窗口截图确认菜单栏、网格、
   播放条、工具箱和自检音符可见。
-- 未验证：鼠标点击放置/删除、保存对话框、播放/暂停的真实交互（自动截图环境无法注入鼠标）。
+- 已验证：真实 `bopeebo` 加载（38 小节 / 118 音符）、鼠标点击放置音符、`Ctrl+Z` 撤销、
+  `Ctrl+S` 保存到 `mods/data/bopeebo/bopeebo.json` 并保持 118 音符。
+- 未验证：`ESC` 试玩、面板按钮的真实鼠标命中（注入坐标与窗口缩放不一致，见会话记录）、
+  事件值编辑（尚未实现）。
