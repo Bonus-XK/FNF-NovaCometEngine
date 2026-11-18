@@ -35,6 +35,8 @@
   不再只能用空 `Test` 谱。
 - 逐小节 BPM 的 step 坐标：音符/网格按 `stepAtTime/timeAtStep` 对齐，变速段不再错位。
 - 右侧 `Section / Events` 面板：BPM ±、MustHit、Add/Remove Section、Event Type、Add/Del Event。
+- 打开谱面：左侧 `Song folder` 输入框 + Open，或 `Ctrl+O`；支持当前难度后缀与模组数据目录。
+- 事件值：选中事件后，右侧 `Event Value 1/2` 直接编辑。
 - 撤销/重做：`Ctrl+Z / Ctrl+Y`，最多 40 步；覆盖音符、小节、BPM、事件编辑。
 - 音符选中/长条/类型：左键选中，`Hold -/+` 调整长条，`Cycle Type` 切换类型，`Delete Note` 删除。
 - `ESC` 试玩（`EditorPlayState`），`Backspace` 返回编辑器菜单。
@@ -73,5 +75,6 @@ METEORIC_SAVE_DIR=/tmp/meteoric-chartui ./Meteoric --meteoric-editor=chartui
   播放条、工具箱和自检音符可见。
 - 已验证：真实 `bopeebo` 加载（38 小节 / 118 音符）、鼠标点击放置音符、`Ctrl+Z` 撤销、
   `Ctrl+S` 保存到 `mods/data/bopeebo/bopeebo.json` 并保持 118 音符。
-- 未验证：`ESC` 试玩、面板按钮的真实鼠标命中（注入坐标与窗口缩放不一致，见会话记录）、
-  事件值编辑（尚未实现）。
+- 已验证：`ESC` 进入 `EditorPlayState` 试玩并返回编辑器；`Ctrl+O` 打开 `fresh`（42 小节 / 238 音符），
+  `Ctrl+S` 保存为合法 `psych_v1`。
+- 未验证：面板按钮的真实鼠标命中（注入坐标与窗口缩放不一致）、事件输入框的真实键盘输入。

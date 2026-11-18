@@ -10,6 +10,7 @@ import backend.Section;
 import backend.Song;
 
 import flixel.FlxG;
+import flixel.addons.ui.FlxInputText;
 import flixel.FlxSprite;
 import flixel.FlxState;
 import flixel.group.FlxGroup.FlxTypedGroup;
@@ -136,7 +137,11 @@ class OfficialChartEditorState extends MusicBeatState
 	var sectionInfo:FlxText;
 	var eventInfo:FlxText;
 	var selectedNote:EditorNote = null;
+	var selectedEvent:Dynamic = null;
 	var selectedRect:FlxSprite;
+	var songInput:FlxInputText;
+	var eventValue1:FlxInputText;
+	var eventValue2:FlxInputText;
 
 	override function create():Void
 	{
@@ -421,29 +426,42 @@ class OfficialChartEditorState extends MusicBeatState
 
 	function buildToolbox():Void
 	{
-		toolPanel = new FlxSprite(16, 110).makeGraphic(280, 230, 0xF2FFFFFF, true);
-		FlxSpriteUtil.drawRect(toolPanel, 0, 0, 280, 230, 0xF2FFFFFF, {color: 0xFF888888, thickness: 1});
+		toolPanel = new FlxSprite(16, 110).makeGraphic(280, 300, 0xF2FFFFFF, true);
+		FlxSpriteUtil.drawRect(toolPanel, 0, 0, 280, 300, 0xF2FFFFFF, {color: 0xFF888888, thickness: 1});
 		toolPanel.scrollFactor.set();
 		add(toolPanel);
 		toolTitle = makeText(28, 118, 0, 'Notes', 18, 0xFF222222);
 		add(toolTitle);
 		toolToggle = makeText(266, 120, 0, '-', 18, 0xFF222222);
 		add(toolToggle);
-		var lines:Array<String> = ['Snap: 1/16', 'Type: Default', '', 'LMB: note/event', 'RMB: delete', 'Space: play / pause', 'Esc: playtest', 'Ctrl+Z/Y: undo/redo'];
+		var lines:Array<String> = ['Snap: 1/16', 'Type: Default', '', 'LMB: note/event', 'RMB: delete', 'Space: play / pause', 'Esc: playtest'];
 		for (i in 0...lines.length)
 		{
 			var ln:FlxText = makeText(28, 150 + i * 20, 0, lines[i], 12, 0xFF333333);
 			add(ln);
 			toolLines.push(ln);
 		}
+
+		var songLabel:FlxText = makeText(28, 300, 0, 'Song folder', 11, 0xFF333333, LEFT, 'future.ttf');
+		add(songLabel);
+		songInput = new FlxInputText(28, 318, 180, '', 12, 0xFF222222, 0xFFFFFFFF);
+		songInput.text = songName;
+		songInput.backgroundColor = 0xFFFFFFFF;
+		songInput.fieldBorderColor = 0xFF999999;
+		songInput.callback = function(text:String, action:String)
+		{
+			if (action == FlxInputText.ENTER_ACTION) openSong(text);
+		};
+		add(songInput);
+		addPanelButton(214, 318, 70, 28, 'Open', function() openSong(songInput.text));
 	}
 
 	function buildSectionPanel():Void
 	{
 		var px:Float = FlxG.width - 300;
 		var py:Float = 110;
-		var panel:FlxSprite = new FlxSprite(px, py).makeGraphic(284, 392, 0xF2FFFFFF, true);
-		FlxSpriteUtil.drawRect(panel, 0, 0, 284, 392, 0xF2FFFFFF, {color: 0xFF888888, thickness: 1});
+		var panel:FlxSprite = new FlxSprite(px, py).makeGraphic(284, 470, 0xF2FFFFFF, true);
+		FlxSpriteUtil.drawRect(panel, 0, 0, 284, 470, 0xF2FFFFFF, {color: 0xFF888888, thickness: 1});
 		panel.scrollFactor.set();
 		add(panel);
 		var title:FlxText = makeText(px + 12, py + 8, 0, 'Section / Events', 16, 0xFF222222, LEFT, 'future.ttf');
@@ -471,7 +489,21 @@ class OfficialChartEditorState extends MusicBeatState
 		addPanelButton(px + 146, py + 300, bw, bh, 'Hold +', function() changeSelectedHold(1));
 		addPanelButton(px + 12, py + 334, bw, bh, 'Delete Note', deleteSelectedNote);
 		addPanelButton(px + 146, py + 334, bw, bh, 'Cycle Type', cycleNoteType);
-		var hint:FlxText = makeText(px + 12, py + 370, 0, 'Ctrl+Z/Y  ESC playtest  Bksp menu', 10, 0xFF555555, LEFT, 'future.ttf');
+		var v1Label:FlxText = makeText(px + 12, py + 370, 0, 'Event Value 1', 10, 0xFF333333, LEFT, 'future.ttf');
+		var v2Label:FlxText = makeText(px + 12, py + 404, 0, 'Event Value 2', 10, 0xFF333333, LEFT, 'future.ttf');
+		add(v1Label);
+		add(v2Label);
+		eventValue1 = new FlxInputText(px + 12, py + 384, 126, '', 11, 0xFF222222, 0xFFFFFFFF);
+		eventValue1.backgroundColor = 0xFFFFFFFF;
+		eventValue1.fieldBorderColor = 0xFF999999;
+		eventValue1.callback = function(text:String, action:String) applyEventValue(1, text);
+		add(eventValue1);
+		eventValue2 = new FlxInputText(px + 146, py + 384, 126, '', 11, 0xFF222222, 0xFFFFFFFF);
+		eventValue2.backgroundColor = 0xFFFFFFFF;
+		eventValue2.fieldBorderColor = 0xFF999999;
+		eventValue2.callback = function(text:String, action:String) applyEventValue(2, text);
+		add(eventValue2);
+		var hint:FlxText = makeText(px + 12, py + 430, 0, 'Ctrl+Z/Y  ESC playtest  Bksp menu', 10, 0xFF555555, LEFT, 'future.ttf');
 		add(hint);
 	}
 
@@ -492,7 +524,9 @@ class OfficialChartEditorState extends MusicBeatState
 		{
 			sectionInfo.text = 'Section ' + sec + ' / ' + getSectionBeats(sec) + ' beats\nBPM ' + Std.int(getSectionBpm(sec)) + '  ' + (getSectionBpm(sec) != getSectionBpm(sec - 1) ? 'CHANGE' : '') + '  Secs ' + _song.notes.length;
 		}
-		if (eventInfo != null) eventInfo.text = 'Event: ' + (eventTypeIndex == 0 ? '(none)' : eventTypes[eventTypeIndex]) + '\nEvents: ' + _song.events.length;
+		if (eventInfo != null) eventInfo.text = 'Event: ' + (selectedEvent != null ? selectedEvent[1][0][0] : '(none)') + '\nEvents: ' + _song.events.length;
+		if (selectedEvent != null && eventValue1 != null && !eventValue1.hasFocus) eventValue1.text = Std.string(selectedEvent[1][0][1]);
+		if (selectedEvent != null && eventValue2 != null && !eventValue2.hasFocus) eventValue2.text = Std.string(selectedEvent[1][0][2]);
 	}
 
 	function getSectionBpm(index:Int):Float
@@ -570,6 +604,37 @@ class OfficialChartEditorState extends MusicBeatState
 	function addEventAtPlayhead():Void
 	{
 		addEventAt(snapTime(Conductor.songPosition));
+	}
+
+	function applyEventValue(which:Int, text:String):Void
+	{
+		if (selectedEvent == null) return;
+		if (selectedEvent[1] == null || selectedEvent[1].length == 0) return;
+		selectedEvent[1][0][which] = text;
+	}
+
+	function selectEventNear(time:Float):Bool
+	{
+		var best:Dynamic = null;
+		var bestDist:Float = 1000000;
+		for (e in _song.events)
+		{
+			var d:Float = Math.abs(e[0] - time);
+			if (d < bestDist)
+			{
+				bestDist = d;
+				best = e;
+			}
+		}
+		if (best != null && bestDist < 1200)
+		{
+			selectedEvent = best;
+			selectedNote = null;
+			status('Selected event: ' + best[1][0][0]);
+			return true;
+		}
+		selectedEvent = null;
+		return false;
 	}
 
 	function addEventAt(time:Float):Void
@@ -729,6 +794,14 @@ class OfficialChartEditorState extends MusicBeatState
 		updatePanel();
 		updateInput(elapsed);
 		frameCount++;
+		#if sys
+		if (frameCount == 20)
+		{
+			var playtestFlag:String = null;
+			try playtestFlag = Sys.getEnv('METEORIC_UI_PLAYTEST') catch (e:Dynamic) {}
+			if (playtestFlag == '1') startPlaytest();
+		}
+		#end
 		if (!loggedFirstFrame)
 		{
 			loggedFirstFrame = true;
@@ -940,6 +1013,10 @@ class OfficialChartEditorState extends MusicBeatState
 			}
 		}
 
+		// 输入框聚焦时只让 FlxInputText 处理按键，避免空格/方向键同时触发编辑器快捷键
+		if ((songInput != null && songInput.hasFocus) || (eventValue1 != null && eventValue1.hasFocus) || (eventValue2 != null && eventValue2.hasFocus))
+			return;
+
 		if (FlxG.mouse.wheel != 0 && mouse.y > top && mouse.y < bottom)
 		{
 			if (FlxG.sound.music == null) return;
@@ -950,7 +1027,8 @@ class OfficialChartEditorState extends MusicBeatState
 
 		if (FlxG.mouse.justPressed && mouse.x >= EVENT_X && mouse.x < EVENT_X + GRID_SIZE && mouse.y > top && mouse.y < bottom)
 		{
-			addEventAt(snapTime(timeAtStep(stepAtTime(Conductor.songPosition) + (mouse.y - PLAY_Y) / (GRID_SIZE * zoom))));
+			var et:Float = snapTime(timeAtStep(stepAtTime(Conductor.songPosition) + (mouse.y - PLAY_Y) / (GRID_SIZE * zoom)));
+			if (!selectEventNear(et)) addEventAt(et);
 		}
 		else if (FlxG.mouse.justPressedRight && mouse.x >= EVENT_X && mouse.x < EVENT_X + GRID_SIZE && mouse.y > top && mouse.y < bottom)
 		{
@@ -987,7 +1065,7 @@ class OfficialChartEditorState extends MusicBeatState
 			snapIndex = (snapIndex + snaps.length - 1) % snaps.length;
 		}
 		if (FlxG.keys.justPressed.RIGHT) snapIndex = (snapIndex + 1) % snaps.length;
-		if (FlxG.keys.justPressed.ESCAPE)
+		if (FlxG.keys.justPressed.ESCAPE || FlxG.keys.justPressed.F1)
 		{
 			startPlaytest();
 			return;
@@ -1000,6 +1078,7 @@ class OfficialChartEditorState extends MusicBeatState
 		if (FlxG.keys.pressed.CONTROL && FlxG.keys.justPressed.Z) undoEdit();
 		if (FlxG.keys.pressed.CONTROL && FlxG.keys.justPressed.Y) redoEdit();
 		if (FlxG.keys.pressed.CONTROL && FlxG.keys.justPressed.S) saveChart();
+		if (FlxG.keys.pressed.CONTROL && FlxG.keys.justPressed.O) focusSongInput();
 		if (FlxG.keys.justPressed.LBRACKET && sectionStarts.length > 0)
 		{
 			var sec:Int = sectionForTime(Conductor.songPosition);
@@ -1035,7 +1114,7 @@ class OfficialChartEditorState extends MusicBeatState
 		closeMenu();
 		var items:Array<String> = switch (index)
 		{
-			case 0: ['New Chart', 'Save Chart', 'Export JSON', 'Exit'];
+			case 0: ['Open Chart...', 'Save Chart', 'Export JSON', 'Exit'];
 			case 1: ['Delete Note', 'Clear Section', 'Select All'];
 			case 2: ['Reset Zoom', 'Toggle Dark Theme'];
 			case 3: ['Play / Pause', 'Restart'];
@@ -1055,7 +1134,7 @@ class OfficialChartEditorState extends MusicBeatState
 		}
 		menuItemActions = switch (index)
 		{
-			case 0: [newChart, saveChart, exportChart, backToMenu];
+			case 0: [focusSongInput, saveChart, exportChart, backToMenu];
 			case 1: [deleteSelectedOrLast, clearSection, selectAllPlaceholder];
 			case 2: [resetZoom, toggleThemePlaceholder];
 			case 3: [togglePlay, restartSong];
@@ -1239,6 +1318,53 @@ class OfficialChartEditorState extends MusicBeatState
 	function restartSong():Void
 	{
 		seekTo(0);
+	}
+
+	function focusSongInput():Void
+	{
+		if (songInput != null)
+		{
+			songInput.text = '';
+			songInput.hasFocus = true;
+		}
+		status('Type song folder + Enter');
+	}
+
+	function openSong(name:String):Void
+	{
+		if (name == null) return;
+		var path:String = Paths.formatToSongPath(name.trim());
+		if (path.length == 0) return;
+		try
+		{
+			var diff:String = Difficulty.getString();
+			if (diff == Difficulty.getDefault()) diff = null;
+			var chart:String = path + (diff != null && diff.length > 0 ? '-' + diff : '');
+			var loaded:SwagSong = Song.loadFromJson(chart, path);
+			if (loaded == null) throw 'null chart';
+			_song = loaded;
+			songName = path;
+			if (_song.keys == null) _song.keys = 4;
+			ExtraKeys.setSongKeys(_song.keys);
+			PlayState.setSong(_song);
+			Conductor.bpm = _song.bpm;
+			Conductor.mapBPMChanges(_song);
+			recalculateSections();
+			rebuildFlatNotes();
+			undoStack = [];
+			redoStack = [];
+			selectedNote = null;
+			selectedEvent = null;
+			songInput.text = path;
+			songInput.hasFocus = false;
+			seekTo(0);
+			loadAudio();
+			status('Opened: ' + path);
+		}
+		catch (e:Dynamic)
+		{
+			status('Open failed: ' + path);
+		}
 	}
 
 	function newChart():Void
