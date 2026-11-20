@@ -17,13 +17,13 @@ class SaveVariables {
 	@:keep public var showVer:Bool = true;
 	@:keep public var fpsInTitleBar:Bool = false;
 	@:keep public var fpsColor:String = '自动';
-	// FPS 显示样式：'方块'（半透明方形徽章，默认）| '经典'（无底色多行文本）
+	// FPS 显示样式：'方块'（左上角固定透明方形徽章，显示项由 fpsStatsList 管理，默认）| '经典'（无底色多行文本）
 	// 存档值即中文档位名（与 fpsColor 同规范，显示层翻译走 optionValue.fpsStyle.*）
 	@:keep public var fpsStyle:String = '方块';
 	// FPS 计数器显示项与顺序（CSV）：'Mem'/'Peak'/'Heap'/'CPU'/'Ver'/'Git' 的子集排列；FPS 数字固定主行，不在清单内。
 	// 'Mem'/'Peak'=进程物理内存（RSS，含显存/系统共享）；'Heap'=脚本堆（Haxe GC 堆，2026-10-21 前 Mem 的旧口径）。
 	// 'Ver' = 引擎版本行（NovaComet Engine vX.X.X）；'Git' = 提交信息行（#N hash 分支*）—— 两个独立开关。
-	// 由 options.FPSStatsEditorState 编辑；方块/经典两种样式共用同一张清单。空串 = 只显示 FPS 本体。
+	// 由 options.FPSStatsEditorState 编辑；方块徽章 / 经典样式 / 窗口标题均读取此清单。空串 = 只显示 FPS 本体。
 	@:keep public var fpsStatsList:String = 'Mem,Peak,CPU,Ver,Git';
 	// 帧率上限档位：120/240/480/无上限（移动端默认 120 防过热）
 	// ⚠ 桌面端默认值按平台分：macOS = 无上限（构建后恢复 tools/lime.ndll.wallclock 保证补丁在位）；
@@ -425,6 +425,18 @@ class SaveVariables {
 	#else
 	@:keep public var containerExitKeys:Array<FlxKey> = [CONTROL, C];
 	#end
+
+	// ===== 多引擎切换（启动目标） =====
+	/**
+	 * 本次启动要进入哪个引擎：`''` = 本引擎（默认，零行为变化），
+	 * 其它值 = `mods/_containers/<folder>` 的目录名（容器 / 外部引擎）。
+	 *
+	 * **一个语义一个字段**：这里只存「启动目标」，不兼职「容器功能是否启用」
+	 * （后者是 containersEnabled，关闭时本字段被忽略，见 backend/EngineChain）。
+	 * 用目录名而不是绝对路径：容器目录搬家/换机器后仍能按名字找回；
+	 * 找不到就当本引擎启动，并在引擎切换页给出明确提示。
+	 */
+	@:keep public var engineChainTarget:String = '';
 
 	public function new()
 	{
@@ -912,6 +924,11 @@ class ClientPrefs {
 				if (vbp != null) data.botplayPill = (vbp == true);
 				var vwd:Dynamic = Reflect.field(sd, 'watermarkDim');
 				if (vwd != null) data.watermarkDim = (vwd == true);
+				// engineChainTarget（多引擎切换）：字符串字段显式回填；空串 = 本引擎（合法值，
+				// 不能像 hitsoundName 那样把空串当成"没存过"而丢弃 —— 那会让"切回本引擎"在重启后失效）
+				var vect:Dynamic = Reflect.field(sd, 'engineChainTarget');
+				if (vect != null && Std.isOfType(vect, String))
+					data.engineChainTarget = (vect:String);
 			}
 			var __names:Array<String> = sd == null ? [] : Reflect.fields(sd);
 			trace('[ClientPrefs] psychV104Compat loaded = ' + data.psychV104Compat

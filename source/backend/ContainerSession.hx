@@ -50,6 +50,16 @@ class ContainerSession
 	/** 面向界面的提示（回到 ContainersMenuState 时显示）。 */
 	public static var notice:String = null;
 
+	/**
+	 * 本次**进程**内成功启动过的容器次数（resetGame 不会清零）。
+	 *
+	 * 用途：多引擎切换的启动交接只在"本次进程还没跑过任何容器"时执行一次。
+	 * 否则容器返回 → `FlxG.resetGame()` → 重建 TitleState → 又看到启动目标 →
+	 * 再次交接，形成**永远回不到本引擎**的回环（目标引擎秒退时尤其致命）。
+	 * 从容器页手动启动同样计入 —— 不是只有自动交接才需要防回环。
+	 */
+	public static var launchCount:Int = 0;
+
 	static var waitSeconds:Float = ContainerLauncher.DEFAULT_WAIT;
 	static var phase:Phase = Phase.Idle;
 	static var phaseTimer:Float = 0;
@@ -222,6 +232,7 @@ class ContainerSession
 		}
 
 		FlxG.log.add('[Container] ' + info.displayName + Lang.tOr('container.starting', ' 启动中…'));
+		launchCount++;
 		return null;
 		#end
 	}

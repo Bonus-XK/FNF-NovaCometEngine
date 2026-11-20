@@ -23,6 +23,7 @@ import flixel.util.FlxColor;
 import flixel.util.FlxSpriteUtil;
 
 import objects.BackButton;
+import objects.ContainerButton;
 
 import options.OptionsState;
 
@@ -731,87 +732,11 @@ class ContainersMenuState extends MusicBeatState
 		// 故默认传 null、在此解析 —— 同时保证取到的是「当前主题」的值，而不是类加载时的快照。
 		if (fill == null) fill = DesignTokens.panelFill;
 		if (border == null) border = DesignTokens.panelOutline;
-		var spr:FlxSprite = new FlxSprite(x, y).makeGraphic(Std.int(w), Std.int(h), FlxColor.TRANSPARENT);
+		var spr:FlxSprite = new FlxSprite(x, y).makeGraphic(Std.int(w), Std.int(h), FlxColor.TRANSPARENT, true);
 		FlxSpriteUtil.drawRoundRect(spr, 0, 0, w, h, radius, radius, fill);
 		if (border != null)
 			FlxSpriteUtil.drawRoundRect(spr, 1, 1, w - 2, h - 2, radius, radius, FlxColor.TRANSPARENT, {color: border, thickness: 1.5});
 		spr.scrollFactor.set();
 		return spr;
-	}
-}
-
-/**
- * 系统域圆角按钮（MD3 令牌；与 ModsMenuState 的按钮同款观感，独立成类避免跨模块耦合）。
- */
-class ContainerButton extends FlxSpriteGroup
-{
-	public var onClick:Void->Void;
-	public var spr:FlxSprite;
-	/** 按钮文字：开关类按钮需要运行期改文案/配色（ContainerButton 是本文件私有类，公开无风险）。 */
-	public var label:FlxText;
-	public var btnW:Float;
-	public var btnH:Float;
-	var hovered:Bool = false;
-	var awake:Bool = false;
-	var lastX:Float = 0;
-	var lastY:Float = 0;
-	var enabled:Bool = true;
-
-	public function new(x:Float, y:Float, w:Float, h:Float, text:String, ?cb:Void->Void)
-	{
-		super(x, y);
-		onClick = cb;
-		btnW = w;
-		btnH = h;
-
-		spr = new FlxSprite().makeGraphic(Std.int(w), Std.int(h), FlxColor.TRANSPARENT);
-		FlxSpriteUtil.drawRoundRect(spr, 0, 0, w, h, 14, 14, 0x66161622);
-		FlxSpriteUtil.drawRoundRect(spr, 1, 1, w - 2, h - 2, 14, 14, FlxColor.TRANSPARENT, {color: 0x8CFFFFFF, thickness: 1.5});
-		spr.alpha = 0.85;
-		spr.scrollFactor.set();
-		add(spr);
-
-		label = new FlxText(0, 0, Std.int(w), text, 18);
-		label.setFormat(Paths.font('future.ttf'), 18, 0xFFCFCFDC, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
-		label.borderSize = 1.5;
-		label.textField.height = 44;
-		label.scrollFactor.set();
-		label.y = 12;
-		add(label);
-
-		scrollFactor.set();
-		lastX = FlxG.mouse.screenX;
-		lastY = FlxG.mouse.screenY;
-	}
-
-	public function setEnabled(v:Bool):Void
-	{
-		enabled = v;
-		alpha = v ? 1 : 0.45;
-	}
-
-	public function over(mx:Float, my:Float):Bool
-	{
-		if (!visible || !enabled) return false;
-		return mx >= x && mx <= x + btnW && my >= y && my <= y + btnH;
-	}
-
-	public function setHovered(mx:Float, my:Float)
-	{
-		if (!awake)
-		{
-			var dx:Float = mx - lastX;
-			var dy:Float = my - lastY;
-			if (dx * dx + dy * dy < 100) return;
-			awake = true;
-		}
-		lastX = mx;
-		lastY = my;
-
-		var v:Bool = over(mx, my);
-		if (hovered == v) return;
-		hovered = v;
-		spr.color = v ? 0xFFFFFFFF : 0xFFD5D9DF;
-		spr.alpha = v ? 1 : 0.85;
 	}
 }

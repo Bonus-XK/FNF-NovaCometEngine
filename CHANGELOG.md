@@ -4,6 +4,34 @@
 
 ## 未发布
 
+- **【新功能】多引擎切换（设置 → 引擎切换）**：对齐 NF / NovaFlare 的「引擎选择」——把
+  「下次启动进入哪个引擎」做成可持久化的选择。列表 = 本引擎 + `mods/_containers/<名称>/`
+  里的每个容器（外部引擎，与容器页同一套目录与 `container.json` 清单）。
+  - 「设为启动引擎」写 `ClientPrefs.engineChainTarget`（存**目录名**，不存绝对路径：
+    搬家/换机后仍按名字找回）；下次启动由 `backend/EngineChain.autoBoot()` 在
+    `TitleState.create()` 里把启动过程交接给目标引擎（复用容器会话：让位 → 挂起 →
+    目标独占 → 退出唤醒 → `FlxG.resetGame()` 回标题）。
+  - 「立即进入」只切**本次运行**，不改启动目标（两个语义两个动作，互不隐式联动）；
+    选「本引擎」= 取消切换。
+  - **防回环**：新增 `ContainerSession.launchCount`（进程内计数，`resetGame` 不清零）。
+    本次进程只要跑过任何容器（自动交接或容器页手动启动），就不再自动交接 —— 否则
+    容器退出 → 重建 TitleState → 又看到启动目标 → 再交接，玩家永远回不到本引擎
+    （目标引擎秒退时最致命）。真机实测：交接 1 次、目标退出后停在标题页，无二次交接。
+  - **默认零行为变化**：`engineChainTarget = ''` 时不交接；`containersEnabled = false` 时也不交接。
+    显式选择引擎时把 `containersEnabled` 打开（用户动作，不是代码默认值），状态行明说
+    「已同时启用容器功能」。
+  - 目标目录被删 / 缺主程序：**不静默改存档**，按本引擎启动，界面状态行红字显示「已失效」；
+    `METEORIC_NO_ENGINE_BOOT=1` 可整体关闭本次交接（自动化/排障隔离，与 `METEORIC_SAVE_DIR` 同族）。
+  - 顺手收口：容器页的私有 `ContainerButton` 提到 `objects/ContainerButton.hx`（两页复用同一
+    控件，UI-DESIGN §0「同一语义控件不能两副长相」）；容器页 `makePanel` 补 `unique = true`
+    （同尺寸同色会命中同一张 BitmapData，原地重绘串图）。
+  - 新文件：`source/backend/EngineChain.hx`、`source/states/EngineSelectState.hx`、
+    `source/objects/ContainerButton.hx`；语言包补 `engineSwitch.*` / `options.*` 中英双语。
+  - 验证：`./compile-mac.sh typecheck` 与 `tools/i18n/check_i18n.py` 双门禁通过；真机（隔离存档
+    `METEORIC_SAVE_DIR` + `METEORIC_CONTAINER_ROOT` 假容器）实测「交接 → 目标退出 → 回标题」。
+    **未验证**：真实第三方引擎（Psych 0.7.3 / 1.0.4）的窗口前台化（本机缺「自动化」授权，
+    容器既有行为同样受限，需手动授予后复测）、Windows 构建、英文界面逐项排版。
+
 - **【新功能】全局 CRT 着色器换用 Timothy Lottes 原版移植**：来源 libretro/glsl-shaders
   `crt-lottes.glsl`（public domain），Gaussian 滤波 / 扫描线 / shadow mask / bloom / gamma
   保留上游实现，仅做 FlxShader 接口适配与固定 360 行模拟分辨率；5 个脚本 uniform 与

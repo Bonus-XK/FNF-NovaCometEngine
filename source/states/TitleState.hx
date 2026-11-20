@@ -244,6 +244,23 @@ class TitleState extends MusicBeatState
 					startIntro();
 				});
 			}
+
+			// 【多引擎切换】启动交接：本次启动若设过目标引擎（设置 → 引擎切换），
+			// 在标题流程已经跑起来之后把控制权交给它（ContainerSession 负责让位/挂起/唤醒）。
+			// 三个前提，缺一不可：
+			//  - 走的是真正的标题分支（FlashingState / 编辑器路径在上面就分流出去了）；
+			//  - 本次进程还没跑过任何容器（ContainerSession.launchCount == 0）——
+			//    容器退出会 FlxG.resetGame() 重建本状态，不挡就会无限往回交接（目标秒退时最致命）；
+			//  - 没有测试直达环境变量（自动化/排障隔离，与 METEORIC_SAVE_DIR 同族）。
+			#if desktop
+			var bootTestSong:String = null;
+			try
+				bootTestSong = Sys.getEnv('METEORIC_TEST_SONG')
+			catch (e:Dynamic)
+				bootTestSong = null;
+			if (bootTestSong == null || bootTestSong.length < 1)
+				backend.EngineChain.autoBoot();
+			#end
 		}
 		#end
 

@@ -186,6 +186,13 @@ class OptionsState extends MusicBeatState
 		e.open = enterBackupScreen;
 		list.push(e);
 
+		e = new SectionEntry(Lang.tOr('options.category.engineSwitch', '引擎切换'), Lang.tOr('options.title.engineSwitch', '多引擎切换'));
+		e.external = true;
+		e.hint = Lang.tOr('options.hint.engineSwitch',
+			'多引擎切换是独立整屏界面：列表 = 本引擎 + mods/_containers/ 里的每个容器（外部引擎）。\n选定后在下次启动把启动过程交接给该引擎；选「本引擎」即取消切换。\n点左侧分区栏即可直接打开。');
+		e.open = enterEngineSelect;
+		list.push(e);
+
 		e = new SectionEntry(Lang.tOr('options.category.containers', '容器'), Lang.tOr('options.title.containers', '容器'));
 		e.external = true;
 		e.hint = Lang.tOr('options.hint.containers',
@@ -764,6 +771,13 @@ class OptionsState extends MusicBeatState
 		// 统一走 MusicBeatState.switchState：出场转场 + 设置页 create() 里的进场转场成对出现
 		//（「转场层空窗」的历史顾虑见 enterBackupScreen 注释，淡入淡出样式下已消解）。
 		MusicBeatState.switchState(new states.ContainersMenuState());
+	}
+
+	/** 【引擎切换入口】与容器入口同构：整屏页、按标签恢复选中分区。 */
+	function enterEngineSelect():Void
+	{
+		pendingSelectLabel = Lang.tOr('options.category.engineSwitch', '引擎切换');
+		MusicBeatState.switchState(new states.EngineSelectState());
 	}
 	#end
 
