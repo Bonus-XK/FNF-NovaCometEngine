@@ -87,6 +87,14 @@ class VideoRecorder
 	static var ffmpegPath:String = null;
 	static var nextFrameAt:Float = 0;
 	static var frameInterval:Float = 1.0 / 60.0;
+	/** 上一帧的原始像素：卡顿补帧时重复它（rawvideo 无法带时间戳，只能靠补帧对齐墙钟）。 */
+	static var lastPayload:haxe.io.Bytes = null;
+	/** 待补帧数（卡顿期间少写的帧）。分摊到后续 update，避免一次写几十帧把游戏再卡住。 */
+	static var pendingDupes:Int = 0;
+	/** 每次 update 最多补几帧：太小追不上，太大造成写管道尖峰。 */
+	static inline var MAX_DUPES_PER_UPDATE:Int = 8;
+	/** 待补帧上限（按秒换算），超过就丢弃 —— 防止长时间卡顿后补帧无底洞。 */
+	static inline var MAX_PENDING_SECONDS:Float = 2.0;
 	static var win:Window = null;
 
 	// ---- 快路径的预分配缓冲（start 时分配一次，capture 每帧复用）----
@@ -463,6 +471,48 @@ class VideoRecorder
 	}
 
 	/**
+	 * 解析歌曲人声（Voices / Voices-Player / Voices-Opponent）的可用路径。
+	 *
+	 * 录像此前只把 Inst 当第二路输入 → 导出的视频**没有人声**。
+	 * 这里与游戏内播放保持同源：先找 mod 的 songs/<歌名>/，再回退 assets/songs/<歌名>/。
+	 */
+	public static function resolveSongVocalPaths(songName:String):Array<String>
+	{
+		var out:Array<String> = [];
+		#if (sys && !android)
+		if (songName == null || songName.length == 0) return out;
+		var songPath:String = Paths.formatToSongPath(songName);
+		var ext:String = Paths.SOUND_EXT;
+		for (postfix in ['', 'Player', 'Opponent'])
+		{
+			try
+			{
+				if (!Song.voicesFileExists(songName, postfix)) continue;
+			}
+			catch (e:Dynamic) { continue; }
+
+			var name:String = 'Voices' + (postfix.length > 0 ? '-' + postfix : '');
+			var resolved:String = null;
+			#if MODS_ALLOWED
+			try
+			{
+				var modFile:String = Paths.modsSounds('songs', songPath + '/' + name);
+				if (FileSystem.exists(modFile)) resolved = modFile;
+			}
+			catch (e:Dynamic) {}
+			#end
+			if (resolved == null)
+			{
+				var rel:String = 'assets/songs/' + songPath + '/' + name + '.' + ext;
+				try { if (FileSystem.exists(rel)) resolved = rel; } catch (e:Dynamic) {}
+			}
+			if (resolved != null) out.push(resolved);
+		}
+		#end
+		return out;
+	}
+
+	/**
 	 * 开始录制。
 	 *
 	 * @param songName  用于文件名
@@ -473,7 +523,7 @@ class VideoRecorder
 	 * @param dir       输出目录（相对引擎根目录）
 	 * @return 成功返回输出文件路径，失败返回 null
 	 */
-	public static function start(songName:String, audioPath:String, fps:Float, bitrateMb:Float, encoder:String, dir:String):String
+	public static function start(songName:String, audioPath:String, fps:Float, bitrateMb:Float, encoder:String, dir:String, ?vocalPaths:Array<String> = null):String
 	{
 		#if (sys && !android)
 		if (isRecording) return outPath;
@@ -585,20 +635,29 @@ class VideoRecorder
 			'-i', 'pipe:0'
 		];
 
-		// 音频输入：直接复用歌曲音频文件（与视频同起点 → 天然同步）
-		var hasAudio:Bool = false;
+		// 音频输入：Inst + 人声，全部复用歌曲音频文件（与视频同起点 → 天然同步）。
+		// ⚠ 音画对齐：抓帧发生在 Flixel 的 update 里，而绘制在 update 之后，
+		//   所以每次 readPixels 读到的是**上一帧**已完成的画面 —— 视频整体滞后一帧
+		//   （60fps 下 16.7ms，节奏游戏里是能看出来的）。
+		//   抓帧时机改不了（绘制必然在 update 后），所以让**音频**等一帧：
+		//   -itsoffset 把音频输入的时间戳整体后移 1/fps，与视频的固定滞后抵消。
+		var audioInputs:Array<String> = [];
 		if (audioPath != null && audioPath.length > 0 && FileSystem.exists(audioPath))
+			audioInputs.push(audioPath);
+		// 人声：此前漏掉 → 录出来的视频没有人声（只有 Inst）
+		if (vocalPaths != null)
 		{
-			// ⚠ 音画对齐：抓帧发生在 Flixel 的 update 里，而绘制在 update 之后，
-			//   所以每次 readPixels 读到的是**上一帧**已完成的画面 —— 视频整体滞后一帧
-			//   （60fps 下 16.7ms，节奏游戏里是能看出来的）。
-			//   抓帧时机改不了（绘制必然在 update 后），所以让**音频**等一帧：
-			//   -itsoffset 把音频输入的时间戳整体后移 1/fps，与视频的固定滞后抵消。
+			for (vp in vocalPaths)
+				if (vp != null && vp.length > 0 && FileSystem.exists(vp) && !audioInputs.contains(vp))
+					audioInputs.push(vp);
+		}
+		var hasAudio:Bool = audioInputs.length > 0;
+		for (ap in audioInputs)
+		{
 			args.push('-itsoffset');
 			args.push(Std.string(1.0 / Math.max(1.0, fps)));
 			args.push('-i');
-			args.push(audioPath);
-			hasAudio = true;
+			args.push(ap);
 		}
 
 		args.push('-c:v');
@@ -620,6 +679,20 @@ class VideoRecorder
 
 		if (hasAudio)
 		{
+			if (audioInputs.length > 1)
+			{
+				// 多路（Inst + 人声）混音：normalize=0 避免 amix 默认把每路音量按 1/N 衰减
+				var labels:StringBuf = new StringBuf();
+				for (i in 1...audioInputs.length + 1)
+					labels.add('[' + i + ':a]');
+				args.push('-filter_complex');
+				args.push(labels.toString() + 'amix=inputs=' + audioInputs.length + ':duration=longest:normalize=0[aout]');
+				args.push('-map');
+				args.push('0:v');
+				args.push('-map');
+				args.push('[aout]');
+			}
+
 			args.push('-c:a');
 			args.push('aac');
 			args.push('-b:a');
@@ -639,8 +712,12 @@ class VideoRecorder
 			stdinOut = proc.stdin;
 			isRecording = true;
 			frameCount = 0;
+			pendingDupes = 0;
+			lastPayload = null;
 			frameInterval = 1.0 / Math.max(1.0, fps);
-			nextFrameAt = 0;
+			// 必须对齐当前墙钟：留 0 会让首帧误判「落后十几秒」，
+			// 一开场就补上百帧冻结画面（音画从一开始就错位）。
+			nextFrameAt = haxe.Timer.stamp();
 			trace('[Recorder] 开始录像 ' + w + 'x' + h + '@' + fps + 'fps 路径=' + activePath + ' 单帧缓冲='
 				+ Std.string(Std.int((w * h * 4) / 1048576)) + 'MB → ' + outPath + (hasAudio ? ' (含音频)' : ' (无声)'));
 			return outPath;
@@ -669,16 +746,37 @@ class VideoRecorder
 		#if (sys && !android)
 		if (!isRecording || stdinOut == null) return;
 		if (now == null) now = haxe.Timer.stamp();
+
+		// 卡顿补偿：以前这里直接 `nextFrameAt = now` 丢掉错过的帧，
+		// 导致视频总帧数 < 墙钟×fps，而音频是连续文件 —— 卡一次就永久音画错位（越卡越偏）。
+		// 现在按墙钟把缺少的帧记成「待补帧」，用重复上一帧的方式补齐（CFR 语义）。
+		var behind:Float = now - nextFrameAt;
+		if (behind > frameInterval)
+		{
+			var missed:Int = Math.floor(behind / frameInterval);
+			if (missed > 0)
+			{
+				pendingDupes += missed;
+				var cap:Int = Math.ceil(MAX_PENDING_SECONDS / frameInterval);
+				if (pendingDupes > cap) pendingDupes = cap;
+				nextFrameAt = now; // 重新对齐墙钟，避免误差累积
+			}
+		}
 		if (now < nextFrameAt) return;
-		// 落后太多（卡帧）就重置基准，避免「补帧风暴」瞬间抓几十帧
-		if (now - nextFrameAt > frameInterval * 4) nextFrameAt = now;
 		nextFrameAt += frameInterval;
-		capture();
+
+		var dupes:Int = 0;
+		if (pendingDupes > 0)
+		{
+			dupes = Std.int(Math.min(pendingDupes, MAX_DUPES_PER_UPDATE));
+			pendingDupes -= dupes;
+		}
+		capture(dupes);
 		#end
 	}
 
 	/** 抓一帧并写入 ffmpeg stdin。 */
-	static function capture():Void
+	static function capture(dupes:Int = 0):Void
 	{
 		#if (sys && !android)
 		if (!isRecording || win == null || stdinOut == null) return;
@@ -725,8 +823,19 @@ class VideoRecorder
 				if (frameCount > 0 && frameCount % 30 == 0 && ClientPrefs.data.enableGC) cpp.vm.Gc.run(true); // 约每 0.5s 收一次（major GC，同 PlayState:1062 用法）；尊重「启用 GC」开关
 			}
 
+			// 卡顿补帧：重复上一帧，把视频时间轴拉回与音频/墙钟一致
+			if (dupes > 0 && lastPayload != null)
+			{
+				for (_ in 0...dupes)
+				{
+					stdinOut.writeBytes(lastPayload, 0, lastPayload.length);
+					frameCount++;
+				}
+			}
+
 			stdinOut.writeBytes(payload, 0, payload.length);
 			stdinOut.flush();
+			lastPayload = payload;
 			frameCount++;
 		}
 		catch (e:Dynamic)
@@ -764,6 +873,8 @@ class VideoRecorder
 			+ Std.string(Math.round(lastCaptureMs * 10) / 10) + 'ms）→ ' + outPath);
 		outPath = null;
 		frameInterval = 1.0 / 60.0;
+		pendingDupes = 0;
+		lastPayload = null;
 		nextFrameAt = 0;
 		win = null;
 		frameBuf = null;

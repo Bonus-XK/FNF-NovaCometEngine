@@ -493,6 +493,26 @@ class HScript
 		set('Note', objects.Note);
 		set('CustomSubstate', CustomSubstate);
 		set('Countdown', backend.BaseStage.Countdown);
+		// [Meteoric] StageData 以闭包表暴露，而不是直接塞 Class 对象。
+		// hxcpp 下 hscript 对 Class 对象取字段（Reflect.getProperty(ClassObj, ...)）会原生 SEGV，
+		// try/catch 拦不住；Psych 1.0.x 模组的 `import backend.StageData; StageData.xxx()` 会踩到。
+		// 闭包表在 InterpEx.resolve 里优先命中 variables，脚本拿到的就是普通对象，零崩溃。
+		set('StageData', {
+			getStageFile: function(?stage:String) return backend.StageData.getStageFile(stage),
+			addObjectsToState: function(objectList:Array<Dynamic>, gf:Dynamic, dad:Dynamic, boyfriend:Dynamic, ?group:Dynamic = null, ?ignoreFilters:Bool = false) {
+				var r:Map<String, Dynamic> = backend.StageData.addObjectsToState(objectList, gf, dad, boyfriend, group, ignoreFilters);
+				// ⚠ 不能直接返回 haxe.ds.StringMap：hxcpp 下它的 keyValueIterator 反射取不到
+				// （Reflect.hasField=false → 脚本 `list.keyValueIterator()` 拿到 null → 原生 SEGV）。
+				// hscript.DynamicMap 是具体类、方法真实存在，且 Interp 的 makeKeyValueIterator 显式支持它。
+				var dm:hscript.DynamicMap = new hscript.DynamicMap();
+				if (r != null)
+					for (k in r.keys()) dm.set(k, r.get(k));
+				return dm;
+			},
+			validateVisibility: function(filters:Dynamic) return backend.StageData.validateVisibility(filters),
+			reservedNames: backend.StageData.reservedNames,
+			dummy: function() return backend.StageData.dummy()
+		});
 		#if (!flash && sys)
 		set('FlxRuntimeShader', flixel.addons.display.FlxRuntimeShader);
 		// 全局后处理 shader（CRT 等）：类本身 + 与 Lua 同名的便捷函数

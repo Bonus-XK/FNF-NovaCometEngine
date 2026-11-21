@@ -143,12 +143,13 @@ class ObjectCommands
 			var obj:Dynamic = LuaUtils.getObjectDirectly(obj, false);
 			if(obj != null && obj.animation != null)
 			{
-				obj.animation.addByPrefix(name, prefix, framerate, loop);
-				if(obj.animation.curAnim == null)
-				{
-					if(obj.playAnim != null) obj.playAnim(name, true);
-					else obj.animation.play(name, true);
-				}
+				// [Meteoric] 必须走强类型调用：hxcpp 下对 Dynamic 调 animation.addByPrefix()
+				// 会得到 “Null Function Pointer”（该类的反射字段表里没有这个方法），
+				// 表现为动画静默不创建 → 模组的 `curAnim.finished` 永远为 null。
+				var anim:flixel.animation.FlxAnimationController = cast obj.animation;
+				anim.addByPrefix(name, prefix, framerate, loop);
+				if(anim.curAnim == null)
+					anim.play(name, true);
 				return true;
 			}
 			return false;

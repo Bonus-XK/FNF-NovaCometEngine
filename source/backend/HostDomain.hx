@@ -1134,8 +1134,10 @@ class HostDomain
 		if (ClientPrefs.data.renderMode && !VideoRecorder.isRecording)
 		{
 			var songName:String = (PlayState.SONG != null) ? PlayState.SONG.song : 'song';
+			// 人声必须单独传：只给 Inst 会录出没有人声的视频（Voices 是独立音轨）
 			VideoRecorder.start(songName, VideoRecorder.resolveSongAudioPath(songName), ClientPrefs.data.renderFPS,
-				ClientPrefs.data.renderBitrate, ClientPrefs.data.renderEncoder, ClientPrefs.data.renderPath);
+				ClientPrefs.data.renderBitrate, ClientPrefs.data.renderEncoder, ClientPrefs.data.renderPath,
+				VideoRecorder.resolveSongVocalPaths(songName));
 		}
 		CrashHandler.mark('PlayState.startSong:music-playing');
 	}
@@ -1533,9 +1535,15 @@ class HostDomain
 		#if cpp
 		// 【GC 呼吸阀】首次进入设水位，之后每 20s 强制 major（落在本帧 update 内，profile 可见）
 		// ⚠ hxcpp 的 Gc.enable(false) 只挡分配路径的自动回收，不挡手动 run(true)
-		//（源码级确认：sgInternalEnable 仅在 Immix 分配路径消费）——「启用 GC=关」时
-		// 必须在此跳过强制 major，否则性能页开关形同虚设（2026-11-04 用户实测反馈）。
-		if (ClientPrefs.data.gcBreathing && ClientPrefs.data.enableGC)
+		//（源码级确认：sgInternalEnable 仅在 Immix 分配路径消费）。
+		// 2026-11-17 修复：原先这里带 `&& ClientPrefs.data.enableGC`，导致
+		// 「关自动 GC 消尖峰(enableGC=false) + 开呼吸阀兜底内存(gcBreathing=true)」
+		// 这个最需要内存守护的组合里，呼吸阀被同一开关短路、形同虚设 ——
+		// 墙谱游玩期 GC reserved 池以 15-38MB/s 无限膨胀，数分钟涨到 10GB 卡死。
+		// 呼吸阀是独立的「释放内存」机制（手动 run(true) 不受 enable(false) 影响），
+		// 故移除 enableGC 依赖：只要用户显式开了 gcBreathing，就按它执行兜底回收。
+		// 两个都关的用户依然零行为变化（本分支根本不进）。
+		if (ClientPrefs.data.gcBreathing)
 		{
 			var gcT0:Float = backend.MeteoricProfile.tickNow();
 			var nowBreath:Float = Sys.time();

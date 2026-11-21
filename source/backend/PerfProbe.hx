@@ -34,6 +34,43 @@ class PerfProbe
 	// 采样惰性启动：第一次 processRSS()（每条 mark、每行 profile 输出都会调）拉起线程。
 	static var _rssMB:Float = -1;
 	static var _rssStarted:Bool = false;
+	/** METEORIC_MEMTRACE=1：采样线程把 rss 时间序列落盘 crash/memtrace.txt（游玩期内存增长诊断）。 */
+	static var _memTrace:Bool = false;
+	static var _memTraceInit:Bool = false;
+
+	static function initMemTrace():Void
+	{
+		if (_memTraceInit) return;
+		_memTraceInit = true;
+		try
+		{
+			var e:String = Sys.getEnv("METEORIC_MEMTRACE");
+			_memTrace = (e != null && e == "1");
+			if (_memTrace) memTraceLine("trace begin");
+		}
+		catch (e:Dynamic) {}
+	}
+
+	static function memTraceLine(tag:String):Void
+	{
+		try
+		{
+			var dir:String = './crash';
+			var envDir:String = Sys.getEnv("METEORIC_CRASH_DIR");
+			if (envDir != null && envDir.length > 0) dir = envDir;
+			if (!sys.FileSystem.exists(dir)) sys.FileSystem.createDirectory(dir);
+			var t:Float = Sys.time();
+			var heap:Float = -1;
+			#if cpp
+			try { heap = cpp.vm.Gc.memInfo64(cpp.vm.Gc.MEM_INFO_CURRENT) / 1048576.0; } catch (e:Dynamic) {}
+			#end
+			var line = Std.int(t * 1000) + '\t' + tag + '\t rss=' + Std.int(_rssMB) + 'mb\t heap=' + Std.int(heap) + 'mb\n';
+			var fo = sys.io.File.append(dir + '/memtrace.txt', false);
+			try { fo.writeString(line); } catch (e:Dynamic) {}
+			fo.close();
+		}
+		catch (e:Dynamic) {}
+	}
 
 	/** 最近一次 OS 级采样（MB）。-1 = 尚未采到（线程刚起/平台不支持）。 */
 	public static function processRSS():Float
@@ -46,12 +83,14 @@ class PerfProbe
 	{
 		if (_rssStarted) return;
 		_rssStarted = true;
+		initMemTrace();
 		#if (sys && cpp)
 		cpp.vm.Thread.create(function():Void
 		{
 			while (true)
 			{
 				_rssMB = sampleRSSOnce();
+				if (_memTrace) memTraceLine('sample');
 				Sys.sleep(2.0);
 			}
 		});

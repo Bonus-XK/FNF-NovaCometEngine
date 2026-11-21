@@ -78,6 +78,23 @@ class LuaUtils
 			return value;
 		}
 
+		// [Meteoric] CastNote 写入同样走强类型（脚本 `setPropertyFromGroup(...,'multSpeed',2)`）
+		if (Std.isOfType(instance, objects.Note.CastNote))
+		{
+			var cn:objects.Note.CastNote = cast instance;
+			switch (variable)
+			{
+				case 'mustPress': cn.mustPress = value; return value;
+				case 'multSpeed': cn.multSpeed = value; return value;
+				case 'noteData': cn.noteData = value; return value;
+				case 'strumTime': cn.strumTime = value; return value;
+				case 'noteType': cn.noteType = value; return value;
+				case 'holdLength': cn.holdLength = value; return value;
+				case 'density': cn.density = value; return value;
+				case 'angle': cn.angle = value; return value;
+			}
+		}
+
 		if(PlayState.instance.variables.exists(variable))
 		{
 			PlayState.instance.variables.set(variable, value);
@@ -133,6 +150,42 @@ class LuaUtils
 			return instance.get(variable);
 		}
 
+		// [Meteoric] flixel 6 把一次性动画播完后的 `curAnim` 清空，旧写法
+		// `spr.animation.curAnim.finished` 因此永远读到 null，
+		// 模组的一次性特效（跳脸等）onUpdate 里判断不到“播完”，对象永不消失。
+		// 这里给出语义等价的结果：curAnim 为空 → 视为已完成（与 FlxAnimationController.finished 一致）。
+		if (Std.isOfType(instance, flixel.animation.FlxAnimationController))
+		{
+			var animCtl:flixel.animation.FlxAnimationController = cast instance;
+			switch (variable)
+			{
+				case 'curAnim':
+					if (animCtl.curAnim == null) return _finishedAnimStub();
+					return animCtl.curAnim;
+				case 'finished':
+					return animCtl.finished;
+			}
+		}
+
+		// [Meteoric] CastNote 是“并行静态数组 + get/set 属性”，hxcpp 反射读不到字段
+		// （模组 `getPropertyFromGroup('unspawnNotes', i, 'multSpeed'/'mustPress')` 全返回 nil）。
+		// 这里走强类型读取。
+		if (Std.isOfType(instance, objects.Note.CastNote))
+		{
+			var cn:objects.Note.CastNote = cast instance;
+			switch (variable)
+			{
+				case 'mustPress': return cn.mustPress;
+				case 'multSpeed': return cn.multSpeed;
+				case 'noteData': return cn.noteData;
+				case 'strumTime': return cn.strumTime;
+				case 'noteType': return cn.noteType;
+				case 'holdLength': return cn.holdLength;
+				case 'density': return cn.density;
+				case 'angle': return cn.angle;
+			}
+		}
+
 		if(PlayState.instance.variables.exists(variable))
 		{
 			var retVal:Dynamic = PlayState.instance.variables.get(variable);
@@ -177,6 +230,23 @@ class LuaUtils
 	}
 
 	public static function setGroupStuff(leArray:Dynamic, variable:String, value:Dynamic, ?allowMaps:Bool = false) {
+		// [Meteoric] CastNote：并行静态数组 + get/set 属性，hxcpp 反射写不进去
+		// （脚本 `setPropertyFromGroup('unspawnNotes', i, 'multSpeed', 2)` 会静默失败）。
+		if (Std.isOfType(leArray, objects.Note.CastNote))
+		{
+			var cn:objects.Note.CastNote = cast leArray;
+			switch (variable)
+			{
+				case 'mustPress': cn.mustPress = value; return value;
+				case 'multSpeed': cn.multSpeed = value; return value;
+				case 'noteData': cn.noteData = value; return value;
+				case 'strumTime': cn.strumTime = value; return value;
+				case 'noteType': cn.noteType = value; return value;
+				case 'holdLength': cn.holdLength = value; return value;
+				case 'density': cn.density = value; return value;
+				case 'angle': cn.angle = value; return value;
+			}
+		}
 		var split:Array<String> = variable.split('.');
 		if(split.length > 1) {
 			var obj:Dynamic = Reflect.getProperty(leArray, split[0]);
@@ -193,16 +263,73 @@ class LuaUtils
 	public static function getGroupStuff(leArray:Dynamic, variable:String, ?allowMaps:Bool = false) {
 		var split:Array<String> = variable.split('.');
 		if(split.length > 1) {
-			var obj:Dynamic = Reflect.getProperty(leArray, split[0]);
+			var obj:Dynamic = readField(leArray, split[0]);
 			for (i in 1...split.length-1)
-				obj = Reflect.getProperty(obj, split[i]);
+			{
+				// [Meteoric] 中间对象为 null 时直接返回 null（Psych 行为）。
+				// 否则对 null 继续 Reflect.getProperty 会抛错，脚本的 onUpdate 每帧
+				// 在此中断（表现为“函数静默不执行”，例如 curAnim 为 null 时的
+				// `spr.animation.curAnim.finished`）。
+				if (obj == null) return null;
+				obj = readField(obj, split[i]);
+			}
 
 			leArray = obj;
 			variable = split[split.length-1];
 		}
 
+		if(leArray == null) return null;
 		if(allowMaps && isMap(leArray)) return leArray.get(variable);
-		return Reflect.getProperty(leArray, variable);
+		return readField(leArray, variable);
+	}
+
+	/**
+	 * [Meteoric] 读字段，兼容 hxcpp 下反射取不到的 get/set 属性。
+	 *
+	 * `FlxAnimationController.curAnim` 是 get/set 属性，Reflect.getProperty 在 hxcpp
+	 * 里可能返回 null，导致模组脚本的 `spr.animation.curAnim.finished`
+	 * 永远读不到 → 跳脸/一次性动画不会自行消失。这里对已知类型走强类型读取。
+	 */
+	/** 动画已播完时的共享占位对象（脚本可能每帧读，不能每次 new）。 */
+	static var _finStub:Dynamic = null;
+	static inline function _finishedAnimStub():Dynamic
+	{
+		if (_finStub == null) _finStub = {finished: true, paused: true, name: null, curFrame: 0, numFrames: 0};
+		return _finStub;
+	}
+
+	static function readField(obj:Dynamic, field:String):Dynamic
+	{
+		if (obj == null) return null;
+		if (Std.isOfType(obj, objects.Note.CastNote))
+		{
+			var cn:objects.Note.CastNote = cast obj;
+			switch (field)
+			{
+				case 'mustPress': return cn.mustPress;
+				case 'multSpeed': return cn.multSpeed;
+				case 'noteData': return cn.noteData;
+				case 'strumTime': return cn.strumTime;
+				case 'noteType': return cn.noteType;
+				case 'holdLength': return cn.holdLength;
+				case 'density': return cn.density;
+				case 'angle': return cn.angle;
+			}
+		}
+		if (Std.isOfType(obj, flixel.animation.FlxAnimationController))
+		{
+			var anim:flixel.animation.FlxAnimationController = cast obj;
+			if (field == 'curAnim')
+			{
+				if (anim.curAnim != null) return anim.curAnim;
+				// [Meteoric] flixel 6 里一次性动画播完后 `curAnim` 会被清空，
+				// 旧写法 `spr.animation.curAnim.finished` 因此永远读到 null，
+				// 模组的一次性特效（跳脸等）就不会自行移除。
+				// 这里返回一个“已完成”的占位对象，语义对齐 Psych 时代的读法。
+				return _finishedAnimStub();
+			}
+		}
+		return Reflect.getProperty(obj, field);
 	}
 
 	public static function getPropertyLoop(split:Array<String>, ?checkForTextsToo:Bool = true, ?getProperty:Bool=true, ?allowMaps:Bool = false):Dynamic

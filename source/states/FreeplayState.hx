@@ -33,11 +33,11 @@ class FreeplayState extends MusicBeatState
 	static final ROW_STEP:Float = 120;      // Alphabet 行距（实际步进 = 1.3 * ROW_STEP ≈ 156）
 	static final DRAW_DISTANCE:Int = 4;     // 可见窗口 ±4 行（Psych 0.7.3 默认，无卡片裁剪）
 
-	// 右上磨砂条：歌名 / 历史最高分 / 准确率 / 难度
-	static final PANEL_R_X:Float = 740;
-	static final PANEL_R_Y:Float = 14;
+	// 右上面板：歌名 / 曲目信息 / 评级 / 成绩 / 难度 / 分数进度条（直角、无描边、紧贴右上角）
+	static final PANEL_R_X:Float = 780; // FlxG.width(1280) - PANEL_R_W
+	static final PANEL_R_Y:Float = 0;
 	static final PANEL_R_W:Float = 500;
-	static final PANEL_R_H:Float = 132;
+	static final PANEL_R_H:Float = 160;
 
 	// 底部磨砂条：提示
 	static final PANEL_B_X:Float = 40;
@@ -45,9 +45,12 @@ class FreeplayState extends MusicBeatState
 	static final PANEL_B_W:Float = 1160;
 	static final PANEL_B_H:Float = 48;
 
-	// 右上信息 X
-	static final INFO_X:Float = 772;
-	static final INFO_W:Float = 440;
+	// 面板分栏：左列 = 歌名/曲目信息/评级；右列 = 成绩/难度/进度条
+	static final COL_L_X:Float = 804;
+	static final COL_R_X:Float = 1066;
+	static final COL_R_W:Float = 190;
+	/** 分数条参考满分：引擎无统一满分概念，取常见 100 万档做相对刻度（不写存档、不改计分） */
+	static final SCORE_BAR_MAX:Float = 1000000;
 
 	var songs:Array<SongMetadata> = [];
 
@@ -59,6 +62,16 @@ class FreeplayState extends MusicBeatState
 	var scoreText:FlxText;
 	var ratingText:FlxText;
 	var diffText:FlxText;
+	// 右上面板增强：曲目信息 / 评级徽标 / 分数进度条
+	var metaText:FlxText;      // 角色 · 周目 · 序号
+	var rankBadge:FlxSprite;   // 评级色块
+	var rankText:FlxText;      // 评级字母
+	var scoreBarBG:FlxSprite;
+	var scoreBarFill:FlxSprite;
+	var diffPrevBtn:FlxSprite; // 难度切换：左右圆形按钮
+	var diffNextBtn:FlxSprite;
+	var diffPrevLabel:FlxText;
+	var diffNextLabel:FlxText;
 	var lerpScore:Float = 0;
 	var lerpRating:Float = 0;
 	var intendedScore:Float = 0; // Int64 分数在 lerp 动画边界转 Float（Double 精确到 2^53）
@@ -147,7 +160,8 @@ class FreeplayState extends MusicBeatState
 		bg.screenCenter();
 
 		// ---- 圆角磨砂框（右上成绩条 + 底部提示条；歌曲列表无框，铺在背景上） ----
-		add(makePanel(PANEL_R_X, PANEL_R_Y, PANEL_R_W, PANEL_R_H, 18));
+		// 直角、无描边（描边=半透明白，就是"发光"来源）、紧贴右上角
+		add(makePanel(PANEL_R_X, PANEL_R_Y, PANEL_R_W, PANEL_R_H, 0, null, FlxColor.TRANSPARENT));
 		bottomPanel = makePanel(PANEL_B_X, PANEL_B_Y, PANEL_B_W, PANEL_B_H, 14);
 		add(bottomPanel);
 
@@ -182,30 +196,72 @@ class FreeplayState extends MusicBeatState
 		}
 		WeekData.setDirectoryFromWeek();
 
-		// ---- 右上信息（磨砂条内，左对齐防截断） ----
-		songTitleText = new FlxText(INFO_X, 26, INFO_W, '', 26);
-		songTitleText.setFormat(Paths.font('future.ttf'), 26, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+		// ---- 右上面板：分栏紧凑 ----
+		// 左列：歌名 / 角色·周目·序号 / 评级徽标
+		songTitleText = new FlxText(COL_L_X, 14, 250, '', 24);
+		songTitleText.setFormat(Paths.font('future.ttf'), 24, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		songTitleText.borderSize = 2;
 		songTitleText.scrollFactor.set();
 		add(songTitleText);
 
-		scoreText = new FlxText(INFO_X, 64, INFO_W, '', 22);
-		scoreText.setFormat(Paths.font('future.ttf'), 22, 0xFFFFD166, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+		metaText = new FlxText(COL_L_X, 50, 250, '', 15);
+		metaText.setFormat(Paths.font('future.ttf'), 15, 0xFFA9A9B8, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+		metaText.borderSize = 1;
+		metaText.scrollFactor.set();
+		add(metaText);
+
+		rankBadge = new FlxSprite(COL_L_X, 78).makeGraphic(44, 44, FlxColor.WHITE, true);
+		rankBadge.scrollFactor.set();
+		add(rankBadge);
+		rankText = new FlxText(COL_L_X, 83, 44, '', 26);
+		rankText.setFormat(Paths.font('future.ttf'), 26, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+		rankText.borderSize = 2;
+		rankText.scrollFactor.set();
+		add(rankText);
+
+		// 右列：最高分 / 准确率 / 难度 / 分数进度条
+		scoreText = new FlxText(COL_R_X, 14, COL_R_W, '', 19);
+		scoreText.setFormat(Paths.font('future.ttf'), 19, 0xFFFFD166, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		scoreText.borderSize = 2;
 		scoreText.scrollFactor.set();
 		add(scoreText);
 
-		ratingText = new FlxText(INFO_X, 92, INFO_W, '', 20);
-		ratingText.setFormat(Paths.font('future.ttf'), 20, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+		ratingText = new FlxText(COL_R_X, 42, COL_R_W, '', 17);
+		ratingText.setFormat(Paths.font('future.ttf'), 17, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		ratingText.borderSize = 2;
 		ratingText.scrollFactor.set();
 		add(ratingText);
 
-		diffText = new FlxText(INFO_X, 114, INFO_W, '', 20);
-		diffText.setFormat(Paths.font('future.ttf'), 20, DesignTokens.primary, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+		// 难度切换：左右圆形按钮（UI-DESIGN §0 用圆形热区，不用文字字符冒充按钮）
+		diffPrevBtn = makeCircleBtn(COL_R_X, 64);
+		diffNextBtn = makeCircleBtn(COL_R_X + COL_R_W - 40, 64);
+		add(diffPrevBtn);
+		add(diffNextBtn);
+		diffPrevLabel = new FlxText(diffPrevBtn.x, diffPrevBtn.y, 40, '<', 24);
+		diffNextLabel = new FlxText(diffNextBtn.x, diffNextBtn.y, 40, '>', 24);
+		for (l in [diffPrevLabel, diffNextLabel])
+		{
+			l.setFormat(Paths.font('future.ttf'), 24, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+			l.borderSize = 2;
+			l.scrollFactor.set();
+			add(l);
+		}
+
+		// 难度名 autoSize + wordWrap=false：长难度不换行（UI-DESIGN §2.1）
+		diffText = new FlxText(COL_R_X + 48, 70, 0, '', 17);
+		diffText.setFormat(Paths.font('future.ttf'), 17, DesignTokens.primary, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		diffText.borderSize = 2;
+		diffText.wordWrap = false;
 		diffText.scrollFactor.set();
 		add(diffText);
+
+		scoreBarBG = new FlxSprite(COL_R_X, 106).makeGraphic(Std.int(COL_R_W), 12, 0xFF3A3A46, true);
+		scoreBarBG.scrollFactor.set();
+		add(scoreBarBG);
+		scoreBarFill = new FlxSprite(COL_R_X, 106).makeGraphic(1, 12, DesignTokens.primary, true);
+		scoreBarFill.origin.set(0, 0); // 原点归左：scale.x 从左往右填，不再向左扩展
+		scoreBarFill.scrollFactor.set();
+		add(scoreBarFill);
 
 		missingTextBG = new FlxSprite().makeGraphic(FlxG.width, FlxG.height, FlxColor.BLACK);
 		missingTextBG.alpha = 0.6;
@@ -388,6 +444,15 @@ class FreeplayState extends MusicBeatState
 		fly(scoreText);
 		fly(ratingText);
 		fly(diffText);
+		fly(diffPrevBtn);
+		fly(diffNextBtn);
+		fly(diffPrevLabel);
+		fly(diffNextLabel);
+		fly(metaText);
+		fly(rankBadge);
+		fly(rankText);
+		fly(scoreBarBG);
+		fly(scoreBarFill);
 		fly(bottomPanel);
 		fly(bottomHint);
 
@@ -395,6 +460,22 @@ class FreeplayState extends MusicBeatState
 		// 之前只飞元素、歌曲色背景满屏不动，随后整屏瞬变成加载界面 —— 色块跳变，观感生硬。
 		// 压黑后衔接：飞散 → 全黑 → LoadingState 黑幕淡出浮现（LoadingState.create 尾部）。
 		FlxG.camera.fade(FlxColor.BLACK, 0.16, false, null, true);
+	}
+
+	/** 难度切换圆形按钮（40×40，主题色描边 + 半透明底，命中按圆心半径判定） */
+	function makeCircleBtn(x:Float, y:Float):FlxSprite
+	{
+		var s:FlxSprite = new FlxSprite(x, y).makeGraphic(40, 40, FlxColor.TRANSPARENT, true);
+		FlxSpriteUtil.drawCircle(s, 20, 20, 19, 0x3AFFFFFF, {color: DesignTokens.primary, thickness: 2});
+		s.scrollFactor.set();
+		return s;
+	}
+
+	inline function overCircle(btn:FlxSprite, mx:Float, my:Float):Bool
+	{
+		var dx:Float = mx - (btn.x + 20);
+		var dy:Float = my - (btn.y + 20);
+		return dx * dx + dy * dy <= 20 * 20;
 	}
 
 	function makePanel(x:Float, y:Float, w:Float, h:Float, ?radius:Float = 20, ?fill:Null<Int> = null, ?border:Null<Int> = null):FlxSprite
@@ -477,6 +558,13 @@ class FreeplayState extends MusicBeatState
 		{
 			_lastScoreShown = lerpScore;
 			scoreText.text = Lang.tOr('freeplay.bestScore', '历史最高分：') + lerpScore;
+			// 分数进度条：跟随 lerp 分数平滑增长；宽度按像素重设（autoSize 的宽高用 setGraphicSize 不重建像素）
+			if (scoreBarFill != null)
+			{
+				var ratio:Float = lerpScore <= 0 ? 0 : (lerpScore / SCORE_BAR_MAX);
+				if (ratio > 1) ratio = 1;
+				scoreBarFill.scale.x = COL_R_W * ratio; // 底图宽 1px → scale.x 即目标像素宽
+			}
 		}
 		if (lerpRating != _lastRatingShown)
 		{
@@ -631,13 +719,19 @@ class FreeplayState extends MusicBeatState
 					// 鼠标/触屏点击歌曲行：选中并直接进入该曲目
 					accepted = true;
 				}
-				if (FlxG.mouse.overlaps(diffText) && clickPressed && !overIsland)
+				// 难度圆形按钮：鼠标命中走相机变换后的屏幕坐标（UI-DESIGN §4.3）
+				var dp:FlxPoint = FlxG.mouse.getScreenPosition(cameras[0], FlxPoint.get());
+				var hitMX:Float = dp.x;
+				var hitMY:Float = dp.y;
+				dp.put();
+				var overPrev:Bool = overCircle(diffPrevBtn, hitMX, hitMY);
+				var overNext:Bool = overCircle(diffNextBtn, hitMX, hitMY);
+				diffPrevBtn.color = overPrev ? 0xFFFFFFFF : 0xFFD5D9DF;
+				diffNextBtn.color = overNext ? 0xFFFFFFFF : 0xFFD5D9DF;
+				if ((overPrev || overNext) && clickPressed && !overIsland)
 				{
 					mouseActive = true;
-					if (FlxG.mouse.x < diffText.x + (diffText.width / 2))
-						changeDiff(-1);
-					else
-						changeDiff(1);
+					changeDiff(overPrev ? -1 : 1);
 					_updateSongLastDifficulty();
 				}
 			}
@@ -1034,13 +1128,63 @@ class FreeplayState extends MusicBeatState
 		#end
 
 		lastDifficultyName = Difficulty.getString(curDifficulty);
-		if (Difficulty.list.length > 1)
-			diffText.text = Lang.tOr('freeplay.difficultySelect', '选择难度：< ') + lastDifficultyName.toUpperCase() + ' >';
-		else
-			diffText.text = Lang.tOr('freeplay.difficulty', '难度：') + lastDifficultyName.toUpperCase();
+		// 两按钮之间只放难度名本身，避免"选择难度：< … >"前缀把长难度挤到换行
+		var dn:String = (lastDifficultyName == null) ? '' : lastDifficultyName.toUpperCase();
+		diffText.text = dn;
+		// 先赋值再量宽，循环只截不加 + 硬上界（UI-DESIGN §2.3）
+		var maxW:Float = COL_R_W - 96;
+		if (diffText.width > maxW && diffText.text.length > 4)
+		{
+			var keep:Int = Math.floor(dn.length * (maxW / diffText.width) * 0.92) - 1;
+			if (keep < 3) keep = 3;
+			if (keep > dn.length - 1) keep = dn.length - 1;
+			var t:String = String.fromCharCode(0x2026) + dn.substr(dn.length - keep);
+			diffText.text = t;
+			var step:Int = 0;
+			while (diffText.width > maxW && step < 24 && t.length > 4)
+			{
+				t = t.substr(1);
+				diffText.text = t;
+				step++;
+			}
+		}
+		// 居中于两按钮之间
+		diffText.x = COL_R_X + (COL_R_W - diffText.width) / 2;
 
 		missingText.visible = false;
 		missingTextBG.visible = false;
+		syncPanel();
+	}
+
+	/**
+	 * 同步右上面板的曲目信息与评级徽标（数据以本 State 为准，无新存档字段）。
+	 * 评级按准确率分档：PHI/V/S/A/B/C/F；色块用固定语义色，主题色只用于分数条与难度文字。
+	 */
+	function syncPanel():Void
+	{
+		if (songs.length < 1) return;
+		var m:SongMetadata = songs[curSelected];
+		metaText.text = Lang.tOr('freeplay.metaLine', '%s · %s · %s/%s',
+			[m.songCharacter, Lang.tOr('week.week', '周目 ') + (m.week + 1), curSelected + 1, songs.length]);
+		var acc:Float = intendedRating;
+		if (acc >= 1) rankText.text = 'φ';
+		else if (acc >= 0.96) rankText.text = 'V';
+		else if (acc >= 0.92) rankText.text = 'S';
+		else if (acc >= 0.88) rankText.text = 'A';
+		else if (acc >= 0.82) rankText.text = 'B';
+		else if (acc >= 0.7) rankText.text = 'C';
+		else rankText.text = 'F';
+		var rankColor:Int = 0xFF9A9AA8;
+		switch (rankText.text)
+		{
+			case 'φ': rankColor = 0xFFFFD166;
+			case 'V': rankColor = 0xFF7CB8FF;
+			case 'S': rankColor = 0xFFB79CFF;
+			case 'A': rankColor = 0xFF5DD39E;
+			case 'B': rankColor = 0xFF4A90E2;
+			case 'C': rankColor = 0xFFFFB27A;
+		}
+		rankBadge.color = rankColor;
 	}
 
 	function changeSelection(change:Int = 0, playSound:Bool = true, instant:Bool = false)

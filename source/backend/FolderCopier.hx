@@ -181,7 +181,10 @@ class FolderCopier
 				finished = true;
 
 			case 'err':
-				error = msg.err;
+				// worker 崩溃时发来的字段是 {t:'err', msg:...}（见 run()）。
+				// 旧代码只读 msg.err → 恒为 null → 失败详情丢失。兼容 msg → err。
+				var detail:Dynamic = (msg.msg != null) ? msg.msg : msg.err;
+				error = (detail == null) ? Lang.tOr('install.copyFailed', '复制失败：') : Std.string(detail);
 				finished = true;
 
 			case 'canceled':

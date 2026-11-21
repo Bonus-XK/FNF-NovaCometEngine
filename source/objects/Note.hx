@@ -63,6 +63,7 @@ class CastNote
 	public var holdLength:Float;
 	public var noteType:String;
 	public var multSpeed:Float;       // 每音符滚动倍速（默认 1）
+	public var mustPress:Bool;        // Psych 兼容：true = 玩家侧箭头（脚本用它区分左右手）
 	public var cmpSpam:Array<Dynamic>;// H-Slice 挤压音符扩展 [剩余数, 密度]（展开为连续同轨音符）
 	public var offs:Array<Float>;     // 堆叠合并展开：本组内每个箭头相对基准时间的偏移（ms）
 	// 【有界偏移】offs 开启有界化后只保留前 N 个 + 末个（lastOffset），
@@ -89,6 +90,7 @@ class CastNote
 		holdLength = 0;
 		noteType = null;
 		multSpeed = 1;
+	mustPress = false;
 		cmpSpam = null;
 		offs = null;
 	}
@@ -113,6 +115,7 @@ class CastNote
 	static var __holdLength:Array<Float> = [];
 	static var __noteType:Array<String> = [];
 	static var __multSpeed:Array<Float> = [];
+	static var __mustPress:Array<Bool> = [];   // Psych 兼容：玩家侧箭头标记
 	static var __cmpSpam:Array<Dynamic> = [];    // 元素 = Array<Dynamic> | null
 	static var __offs:Array<Dynamic> = [];       // 元素 = Array<Float> | null
 	static var __offsKeep:Array<Int> = [];     // 簇内真实合并数量
@@ -130,7 +133,7 @@ class CastNote
 	{
 		__slotCount = 0;
 		__strumTime = []; __noteData = []; __chartSeq = []; __density = []; __holdLength = [];
-		__noteType = []; __multSpeed = []; __cmpSpam = []; __offs = []; __offsKeep = []; __lastOffset = [];
+		__noteType = []; __multSpeed = []; __mustPress = []; __cmpSpam = []; __offs = []; __offsKeep = []; __lastOffset = [];
 		__noAnimation = []; __noMissAnimation = []; __blockHit = [];
 		__angle = []; __offsetAngle = []; __wasHit = [];
 	}
@@ -155,6 +158,7 @@ class CastNote
 			__holdLength.push(0);
 			__noteType.push(null);
 			__multSpeed.push(1);
+			__mustPress.push(false);
 			__cmpSpam.push(null);
 			__offs.push(null);
 			__offsKeep.push(0);
@@ -195,6 +199,10 @@ class CastNote
 	public var multSpeed(get, set):Float;
 	inline function get_multSpeed():Float return __multSpeed[idx];
 	inline function set_multSpeed(v:Float):Float return __multSpeed[idx] = v;
+
+	public var mustPress(get, set):Bool;
+	inline function get_mustPress():Bool return __mustPress[idx];
+	inline function set_mustPress(v:Bool):Bool return __mustPress[idx] = v;
 
 	public var cmpSpam(get, set):Array<Dynamic>;
 	inline function get_cmpSpam():Array<Dynamic> return __cmpSpam[idx];
@@ -481,11 +489,14 @@ class Note extends FlxSprite
 	}
 
 	public var hitsoundDisabled:Bool = false;
+	// [Meteoric] 长条段设置 multSpeed 时不要自动 resize：长条段的长度按段数/几何
+	// 在 spawnHoldTail 里统一换算（见该函数末尾的倍速拉伸），否则会被重复缩放。
+	public var skipResizeOnSpeed:Bool = false;
 	public var hitsoundChartEditor:Bool = true;
 	public var hitsound:String = 'hitsound';
 
 	private function set_multSpeed(value:Float):Float {
-		resizeByRatio(value / multSpeed);
+		if (!skipResizeOnSpeed) resizeByRatio(value / multSpeed);
 		multSpeed = value;
 		//trace('fuck cock');
 		return value;

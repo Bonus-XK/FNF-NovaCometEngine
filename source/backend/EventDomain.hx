@@ -567,6 +567,12 @@ class EventDomain
 							if (newB == null) newB = ps.boyfriend;
 							ps.boyfriend = newB;
 							ps.boyfriend.alpha = lastAlpha;
+							// [Meteoric] 同 dad：旧 BF 不能留在 boyfriendGroup（会出现两个 BF）
+							for (_c in ps.boyfriendMap)
+								if (_c != ps.boyfriend) { ps.boyfriendGroup.remove(_c, true); _c.kill(); }
+							if (!ps.boyfriendGroup.members.contains(ps.boyfriend)) ps.boyfriendGroup.add(ps.boyfriend);
+							ps.boyfriend.revive();
+							ps.boyfriend.visible = true;
 							ps.iconP1.changeIcon(ps.boyfriend.healthIcon);
 						}
 						if (ps.boyfriend != null) ps.setOnScripts('boyfriendName', ps.boyfriend.curCharacter);
@@ -591,6 +597,13 @@ class EventDomain
 								ps.gf.visible = false;
 							}
 							ps.dad.alpha = lastAlpha;
+							// [Meteoric] 换角色后必须把旧角色移出舞台：原先只新建并 add，
+							// 旧 dad 仍留在 dadGroup 里 → 出现“两个对手”。
+							for (_c in ps.dadMap)
+								if (_c != ps.dad) { ps.dadGroup.remove(_c, true); _c.kill(); }
+							if (!ps.dadGroup.members.contains(ps.dad)) ps.dadGroup.add(ps.dad);
+							ps.dad.revive();
+							ps.dad.visible = true;
 							ps.iconP2.changeIcon(ps.dad.healthIcon);
 						}
 						if (ps.dad != null) ps.setOnScripts('dadName', ps.dad.curCharacter);
@@ -610,6 +623,12 @@ class EventDomain
 								if (newG == null) newG = ps.gf; // 防御同上
 								ps.gf = newG;
 								ps.gf.alpha = lastAlpha;
+								// [Meteoric] 同 dad/BF：旧 GF 移出 gfGroup
+								for (_c in ps.gfMap)
+									if (_c != ps.gf) { ps.gfGroup.remove(_c, true); _c.kill(); }
+								if (!ps.gfGroup.members.contains(ps.gf)) ps.gfGroup.add(ps.gf);
+								ps.gf.revive();
+								ps.gf.visible = true;
 							}
 							ps.setOnScripts('gfName', ps.gf.curCharacter);
 						}

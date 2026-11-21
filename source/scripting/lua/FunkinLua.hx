@@ -118,6 +118,16 @@ class FunkinLua {
 	// 见 Mods.getModEngineVersion 与 PROGRAMMING.md「模组引擎版本手动匹配」。
 	public var modEngineVersion:String = null;
 	public var closed:Bool = false;
+	/**
+	 * [Meteoric] 负缓存：本脚本确定没有实现的回调。
+	 *
+	 * 每帧会对所有脚本调用 onUpdate / onUpdatePost / onBeatHit / onStepHit 等，
+	 * 而绝大多数脚本只实现其中一两个；以前每次都要 lua_getglobal + 类型判断，
+	 * 还会触发 CrashHandler.setLuaContext → Sys.putEnv（系统调用）。
+	 * 实测 7 个脚本时约 2000 次/秒的无用调用。脚本加载后不会动态新增函数
+	 *（引擎未暴露 loadstring/dofile 之类的运行时执行入口），因此可安全缓存。
+	 */
+	var _missingFuncs:Map<String, Bool> = new Map();
 	// import 导入库系统：记录已导入/正在导入的库路径（防重复执行与循环导入）
 	public var importedScripts:Array<String> = [];
 	private var importingScripts:Array<String> = [];
@@ -288,6 +298,7 @@ class FunkinLua {
 		#if LUA_ALLOWED
 		if(closed) return Function_Continue;
 		if (luaCallDepth > 0) return Function_Continue; // 重入防护：跳过嵌套调用
+		if (_missingFuncs.exists(func)) return Function_Continue; // 已知未实现：直接跳过（省 getglobal + setenv）
 
 		luaCallDepth++;
 		var callResult:Dynamic = Function_Continue;
@@ -304,6 +315,8 @@ class FunkinLua {
 				if (type != Lua.LUA_TFUNCTION) {
 					if (type > Lua.LUA_TNIL)
 						luaTrace("ERROR (" + func + "): attempt to call a " + LuaUtils.typeToString(type) + " value", false, false, FlxColor.RED);
+					else
+						_missingFuncs.set(func, true); // 纯 nil：记入负缓存，后续直接跳过
 
 					Lua.pop(lua, 1);
 				}
@@ -356,7 +369,10 @@ class FunkinLua {
 
 	public function stop() {
 		#if LUA_ALLOWED
-		PlayState.instance.luaArray.remove(this);
+		// 状态销毁后期 PlayState.instance 可能已置空（destroy 末尾 instance = null）；
+		// 脚本 onDestroy 里再次 stop() 会空指针解引用 → 原生 SEGV
+		if (PlayState.instance != null)
+			PlayState.instance.luaArray.remove(this);
 		closed = true;
 
 		if(lua == null) {

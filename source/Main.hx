@@ -492,7 +492,7 @@ class Main extends Sprite
 		// 移动端保持 120，避免高帧导致发热/耗电问题。
 
 		// FPS 计数器：所有平台都创建，安卓/iOS 同样显示（标题栏模式仅在桌面端生效）
-		fpsVar = new FPS(10, 3, 0xFFFFFF);
+		fpsVar = new FPS(6, 6, 0xFFFFFF); // 顶到左上角；方块锚点见 FPS.BG_Y
 		// 方块底必须先于计数器文字 addChild（显示列表顺序 = 衬底在下）
 		if (fpsVar.bg != null) addChild(fpsVar.bg);
 		addChild(fpsVar);

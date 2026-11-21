@@ -3,6 +3,7 @@ package openfl.display;
 import openfl.text.TextField;
 import openfl.text.TextFormat;
 import openfl.display.Sprite;
+import openfl.filters.GlowFilter;
 import lime.ui.Window;
 
 #if cpp
@@ -42,35 +43,34 @@ class FPS extends TextField
 	// 滚动速度指示器：独立 TextField（FPS 不是容器无法挂子对象，由 Main.hx addChild）
 	public var speedTxt:TextField;
 
-	// ===== 方块模式（fpsStyle = '方块'）=====
-	//   bg     — 方形徽章底（圆角、85% 不透明深色）。半透明深底属 UI-DESIGN §1.1
-	//            「跟主题无关的固定暗色」，可硬编码；Main.hx 须最先 addChild（衬底在下）
-	//   subTxt — 副行（显示项清单各行，可多行；内容由 fpsStatsList 决定），Main.hx addChild
-	// 布局随内容自适应：仅内容结构变化（显示项清单/样式切换）时整块重定边长；
-	// 期间尺寸变化走 ±BG_RESIZE_BAND 双向死区（旧版「只增不缩」会留巨型空方块，已废弃）。
-	// 自适应边长按实测 textWidth/textHeight 求 max，任何字号与清单组合都不裁字。
+	// ===== 方块模式（fpsStyle = '方块'，默认）=====
+	// 左上角轻量透明方形徽章：深色低不透明底 + 1px 发丝描边，背景内容可见；
+	// 数字与副行都用黑色描边滤镜，任意底色可读。
+	// 显示项仍由设置页「FPS 显示项」（options.FPSStatsEditorState / fpsStatsList）管理：
+	// 清单项以紧凑单行渲染在副行，边长按项数分档且有硬上限 —— 管理页改动即时生效，
+	// 但绝不回退到旧版「按内容宽度自适应 → 巨型空方块 + 85% 不透明遮背景」。
+	// Main.hx 须最先 addChild(bg)（衬底在下）。
 	public var bg:Sprite;
-	public var subTxt:TextField;
+	public var subTxt:TextField; // 方块副行（显示项紧凑单行；经典样式不用，统计走 this 本体）
 
-	// 布局基准（桌面像素；手机端按 _k 整体缩放）
-	static inline var BG_PAD:Float = 10;          // 方块内边距
-	static inline var BG_CORNER:Float = 11;       // 圆角半径
-	static inline var BG_GAP:Float = 4;           // 主行与副行间距
-	static inline var BG_MIN_SIDE:Float = 84;     // 最小边长（4 位大号数字 + 留白下限）
-	static inline var BG_ALPHA:Float = 0.85;      // 85% 不透明（用户指定）
-	static inline var BG_RGB:Int = 0x161622;      // 徽章底色（固定深色，不随主题）
+	// 固定方形基准（桌面像素；手机端按 _k 整体缩放）
+	static inline var BG_SIDE:Float = 72;       // 0 项（只有 FPS 数字）
+	static inline var BG_SIDE_2:Float = 80;     // 1~2 项
+	static inline var BG_SIDE_MAX:Float = 104;  // 3+ 项：硬上限（容纳 PEAK 等长标签 + 数值），绝不按内容宽度膨胀
+	static inline var BG_CORNER:Float = 10;     // 圆角半径
+	static inline var BG_ALPHA:Float = 0.28;    // 28% 不透明 → 背景可见（UI-DESIGN §1.1 固定暗色）
+	static inline var BG_RGB:Int = 0x0E0E16;    // 徽章底色
 	static inline var BG_LINE_RGB:Int = 0xFFFFFF; // 1px 发丝描边色
-	static inline var BG_LINE_A:Float = 0.27;     // 描边透明度（≈ DesignTokens.panelOutline 0x45）
-	static inline var BG_RESIZE_BAND:Float = 10;  // 边长重排死区（±，小于该变化不重排）
-	static inline var BG_Y:Float = 8;             // 方块顶边（x 沿用计数器 x）
+	static inline var BG_LINE_A:Float = 0.18;   // 描边透明度（只勾边界，不喧宾夺主）
+	static inline var BG_Y:Float = 6;           // 顶到屏幕左上角（x 沿用构造参数）
 
 	var _bigFmt:TextFormat = new TextFormat("VCR OSD Mono", #if mobile 36 #else 24 #end, 0xFFFFFFFF);
 	var _smallFmt:TextFormat = new TextFormat("VCR OSD Mono", #if mobile 28 #else 14 #end, 0xFFFFFFFF);
+	// 副行用简短英文标签（MEM/PEAK/HEAP/CPU/VER/GIT），VCR OSD Mono 英数字形齐全；
+	// 11px 小字，不喧宾夺主。英文标签玩家一眼能认，避免缩写图标/中文都看不懂的问题。
+	var _statFmt:TextFormat = new TextFormat("VCR OSD Mono", #if mobile 22 #else 11 #end, 0xFFD7D7E0);
 	var _curMainFmt:TextFormat;          // 主行当前生效字号（换档才 setTextFormat，防重排抖动）
-	var _subColor:Int = 0xFFD7D7E0;      // 副行固定亮灰（UI-DESIGN §1.1 悬停行文字同族固定色）
 	var _k:Float = #if mobile 2.0 #else 1.0 #end;
-	var _sig:String = "";                // 布局签名（"" = 强制下帧整块重排）
-	var _bgSide:Float = 0;               // 当前方块边长
 	var _lastDrawSide:Float = -1;        // bg 最后一次绘制的边长（仅变化时重绘位图）
 	var _baseX:Float = 0;                // 构造时的基准 x（方块锚点；经典模式还原位）
 	var _baseY:Float = 0;                // 构造时的基准 y（经典模式还原位）
@@ -182,6 +182,11 @@ class FPS extends TextField
 		autoSize = LEFT;
 		multiline = true;
 
+		// 透明徽章的可读性关键：黑色外发光当描边。文字颜色（自动/彩虹/指定色）由
+		// updateColor/textColor 独立驱动，滤镜只描边不改字色；经典样式同样受益。
+		// blur=2 / strength=3 = 约 2px 黑边，不糊字、不开 knockout。
+		filters = [new GlowFilter(0x000000, 0.92, 2, 2, 3, 1, false, false)];
+
 		// 滚动速度指示器（默认隐藏，游戏内且开启设置时才显示）
 		speedTxt = new TextField();
 		speedTxt.selectable = false;
@@ -203,10 +208,12 @@ class FPS extends TextField
 		subTxt = new TextField();
 		subTxt.selectable = false;
 		subTxt.mouseEnabled = false;
-		subTxt.defaultTextFormat = _smallFmt;
+		subTxt.defaultTextFormat = _statFmt;
 		subTxt.autoSize = LEFT;
-		subTxt.multiline = true; // 副行可多行（FPS+Mem+Peak+CPU / 全部档）
+		subTxt.multiline = true; // 副行可多行（显示项清单每行一条）
 		subTxt.visible = false;
+		// 副行同样描边：透明徽章叠在游戏画面上，浅灰小字没有黑边会糊
+		subTxt.filters = [new GlowFilter(0x000000, 0.9, 1.5, 1.5, 2, 1, false, false)];
 
 		#if desktop
 		var w:Window = lime.app.Application.current.window;
@@ -298,7 +305,9 @@ class FPS extends TextField
 	// 滚动速度指示器：显示当前音符滚动速度，颜色随速度变化（慢绿 / 中黄 / 快红）
 	function updateSpeedTxt():Void
 	{
-		if (!ClientPrefs.data.showScrollSpeed || states.PlayState.instance == null)
+		// 方块徽章保持极简：滚动速度只在「经典」样式显示，不挂在徽章下缘
+		if (!ClientPrefs.data.showScrollSpeed || states.PlayState.instance == null
+			|| (bg != null && bg.visible))
 		{
 			speedTxt.visible = false;
 			return;
@@ -310,11 +319,7 @@ class FPS extends TextField
 		else if (spd < 2.5) speedTxt.textColor = 0xFFFFFF00;
 		else speedTxt.textColor = 0xFFFF0000;
 		speedTxt.x = x;
-		// 方块模式：SPD 行钉在方块下缘；经典/标题栏沿用原相对文字位置
-		if (bg != null && bg.visible)
-			speedTxt.y = bg.y + _bgSide + 4 * _k;
-		else
-			speedTxt.y = y + textHeight + 4;
+		speedTxt.y = y + textHeight + 4;
 		speedTxt.visible = visible;
 	}
 
@@ -409,9 +414,35 @@ class FPS extends TextField
 		text = buf.toString();
 	}
 
-	// 方块模式主渲染：统一徽章解剖 = 大号数字主行（颜色语义与经典一致 = _fpsColor）
-	// + 灰色小字副行（subTxt，可多行；内容 = fpsStatsList 清单，编辑器见 options.FPSStatsEditorState）。
-	// 旧版「整块同色多行 + 只增不缩边长」方案已废弃（实机巨型空方块）。
+	// 方块副行 = 简短英文大写标签 + 数值（MEM/PEAK/HEAP/CPU/VER/GIT）。
+	// 纯 ASCII 标签：i18n 不把它当未本地化文案，VCR OSD Mono 字形齐全。
+	function statLinesCompact(item:String, mem:Float):Array<String>
+	{
+		var out:Array<String> = [];
+		switch (item)
+		{
+			case 'Mem':  out.push('MEM ' + formatMem(mem));
+			case 'Heap': out.push('HEAP ' + formatMem(currentHeapBytes()));
+			case 'Peak': out.push('PEAK ' + formatMem(_peakMem));
+			case 'CPU':
+				#if sys
+				out.push('CPU ' + Math.round(_cpuPct) + '%');
+				#end
+			case 'Ver':  out.push('VER v' + Main.meVersion);
+			case 'Git':
+				var gi:String = backend.GitInfo.summary();
+				if (gi != '-' && gi.length > 0)
+				{
+					// summary() 已自带 '#' 前缀（如 '#333 hash branch*'），不要重复加
+					var parts:Array<String> = gi.split(' ');
+					out.push('GIT ' + parts[0]);
+				}
+			default:
+		}
+		return out;
+	}
+
+	// 方块模式主渲染：固定上限的透明正方形徽章，显示 FPS 数字 + 管理页勾选的统计项（紧凑副行）。
 	function updateSquare(mem:Float):Void
 	{
 		if (bg == null)
@@ -421,86 +452,64 @@ class FPS extends TextField
 			return;
 		}
 
-		var items:Array<String> = parseFpsStats();
-
-		// 布局签名：内容结构（显示项清单）。变化才整块重定边长；期间尺寸变化走双向死区
-		var sig:String = items.join(',');
-		var refit:Bool = (sig != _sig);
-		_sig = sig;
+		var lines:Array<String> = [];
+		for (item in parseFpsStats())
+			for (line in statLinesCompact(item, mem))
+				lines.push(line);
 
 		bg.visible = visible;
+		if (lines.length == 0)
+			subTxt.visible = false;
+		else
+		{
+			subTxt.visible = true;
+			subTxt.text = lines.join('\n');
+		}
 
 		setMainFormat(_bigFmt);
 		var numStr:String = '$currentFPS';
 		if (text != numStr) text = numStr;
 		textColor = _fpsColor;
 
-		// 副行 = 清单各行（顺序即显示顺序；空清单 = 只有大号数字本体）
-		var lines:Array<String> = [];
-		for (item in items)
-			for (line in statLines(item, mem, ''))
-				lines.push(line);
-
-		if (lines.length == 0)
-		{
-			subTxt.visible = false;
-			layoutSquare(width, height, 0, 0, refit);
-		}
-		else
-		{
-			subTxt.visible = true;
-			subTxt.text = lines.join('\n');
-			subTxt.textColor = _subColor;
-			layoutSquare(width, height, subTxt.width, subTxt.height, refit);
-		}
+		layoutSquare(width, height, lines.length);
 	}
 
-	// 定边长 + 摆放。边长 = max(最小边, 内容宽+2pad, 内容高+2pad)。
-	// 尺寸变化走 ±BG_RESIZE_BAND 双向死区：Mem 值宽度抖动不触发逐秒重排，
-	// 但明显的尺寸变化两个方向都立即生效（旧版「只增不缩」会留下巨型空方块）。
-	// 内容方内居中：边长富余时留白均分，内容撑不下时取 pad 下限（绝不裁字）。
-	function layoutSquare(textW:Float, textH:Float, subW:Float, subH:Float, refit:Bool):Void
+	// 边长按项数分档（0→72 / 1~2→88 / 3+→104），有硬上限，不按内容宽度自适应。
+	// 锚点固定：bg 永远钉在构造基准位（_baseX, BG_Y），避免 x 正反馈飞出屏幕。
+	function layoutSquare(textW:Float, textH:Float, subLines:Int):Void
 	{
-		var pad:Float = BG_PAD * _k;
-		var gap:Float = BG_GAP * _k;
-		var band:Float = BG_RESIZE_BAND * _k;
-		var contentW:Float = Math.max(textW, subW);
-		var contentH:Float = textH + (subH > 0 ? gap + subH : 0);
-		// Haxe 的 Math.max 只收两个参数，三层嵌套
-		var need:Float = Math.max(Math.max(BG_MIN_SIDE * _k, contentW + pad * 2), contentH + pad * 2);
-		if (refit || _bgSide <= 0) _bgSide = need;
-		else if (need > _bgSide + band) _bgSide = need;
-		else if (need < _bgSide - band) _bgSide = need;
-
-		// 锚点固定：bg 永远钉在构造基准位（_baseX, BG_Y）。
-		// 若拿「当前 x」当基准，会形成 bg.x ← x ← bg.x + cx 的正反馈链 → 徽章匀速飞出屏幕
+		var side:Float = Math.round((subLines <= 0 ? BG_SIDE : (subLines <= 2 ? BG_SIDE_2 : BG_SIDE_MAX)) * _k);
 		if (bg.x != _baseX || bg.y != BG_Y)
 		{
 			bg.x = _baseX;
 			bg.y = BG_Y;
 		}
-		redrawSquare();
+		redrawSquare(side);
 
-		var cx:Float = Math.max(pad, (_bgSide - contentW) * 0.5);
-		var cy:Float = Math.max(pad, (_bgSide - contentH) * 0.5);
-		var wantX:Float = Math.round(bg.x + cx);  // 取整：避免半像素导致的文字发虚
-		var wantY:Float = Math.round(bg.y + cy);
-		// this 即 TextField：x/y 就是文字自身的坐标，直接摆进方块
+		// 主行 + 副行整块在方内垂直居中；水平各自居中
+		var lineH:Float = 13 * _k; // _statFmt 11px 行高近似
+		var blockH:Float = textH + (subLines > 0 ? 2 * _k + subLines * lineH : 0);
+		var top:Float = (side - blockH) * 0.5;
+		if (top < 4 * _k) top = 4 * _k;
+		var wantX:Float = Math.round(bg.x + (side - textW) * 0.5);
+		var wantY:Float = Math.round(bg.y + top);
+		if (wantX < bg.x) wantX = bg.x;
+		if (wantY < bg.y) wantY = bg.y;
 		if (x != wantX) x = wantX;
 		if (y != wantY) y = wantY;
-		if (subH > 0)
+		if (subLines > 0)
 		{
-			var subX:Float = bg.x + Math.max(pad, (_bgSide - subW) * 0.5);
-			var subY:Float = y + textH + gap;
+			var subX:Float = bg.x + Math.round((side - subTxt.width) * 0.5);
+			var subY:Float = y + textH + 2 * _k;
 			if (subTxt.x != subX) subTxt.x = subX;
 			if (subTxt.y != subY) subTxt.y = subY;
 		}
 	}
 
-	// 方块位图重绘：仅在边长变化时执行（100ms tick 常态命中同尺寸直接跳过）
-	function redrawSquare():Void
+	// 方块位图重绘：边长分档，仅档位变化时重绘
+	function redrawSquare(side:Float):Void
 	{
-		var s:Float = Math.round(_bgSide);
+		var s:Float = Math.round(side);
 		if (s == _lastDrawSide) return;
 		_lastDrawSide = s;
 		bg.x = Math.round(bg.x);
@@ -524,12 +533,18 @@ class FPS extends TextField
 		}
 	}
 
-	// 隐藏方块及副行（经典样式 / 标题栏模式每 100ms 兜底）；并还原计数器基准位
-	// （方块模式会把 this 摆进方内，切回经典/标题栏后必须移回 _baseX/_baseY，否则残留偏移）
+	// 隐藏方块及副行（经典样式 / 标题栏模式每 100ms 兜底）；并还原计数器基准位与经典小字号
+	// （方块模式会把 this 摆进方内并换大号字，切回经典/标题栏必须移回 _baseX/_baseY、换回字号）
 	inline function hideSquare():Void
 	{
 		if (bg != null) bg.visible = false;
 		subTxt.visible = false;
+		if (_curMainFmt != _smallFmt)
+		{
+			defaultTextFormat = _smallFmt;
+			setTextFormat(_smallFmt);
+			_curMainFmt = _smallFmt;
+		}
 		if (x != _baseX) x = _baseX;
 		if (y != _baseY) y = _baseY;
 	}
@@ -539,7 +554,6 @@ class FPS extends TextField
 	{
 		var inTitle:Bool = ClientPrefs.data.fpsInTitleBar;
 		visible = inTitle ? false : ClientPrefs.data.showFPS;
-		_sig = ""; // 强制下次刷新整块重排（样式/清单可能都已变化）
 		#if desktop
 		if (inTitle)
 		{

@@ -258,6 +258,8 @@ class ZipExtractor
 	public var pendingPrompt:Bool = false;
 
 	var zipPath:String;
+	/** 解压目标目录：worker 只上报 unzip 退出码，由主线程按"是否解出文件"判定成败。 */
+	var destDir:String = null;
 	var cancelRequested:Bool = false;
 	var mainThread:sys.thread.Thread;
 	var workerCount:Int = 1; // 系统 unzip/tar 解压：单 worker 执行外部命令，速度远快于 Haxe 层 deflate（36s -> 1s）
@@ -275,6 +277,7 @@ class ZipExtractor
 	 */
 	public function start(destDir:String):Void
 	{
+		this.destDir = destDir;
 		#if (cpp || neko || hl)
 		mainThread = sys.thread.Thread.current();
 		for (i in 0...workerCount)
@@ -350,10 +353,11 @@ class ZipExtractor
 			var cmd:String = 'unzip -o -q "' + zipPath + '" -d "' + destDir + '"';
 			#end
 			var code:Int = Sys.command(cmd);
-			if (code != 0)
-				safeSend({t: 'err', msg: Lang.tOr('zip.systemFail', '系统解压失败（exit ') + code + Lang.tOr('zip.systemFailClose', '）')});
-			else
-				safeSend({t: 'done'});
+			// 不在这里用 code != 0 一刀切判失败：Info-ZIP unzip 对被跳过的条目
+			// （__MACOSX/符号链接/不支持的压缩方法等）会返回 1 / 81 等非 0，
+			// 但其余文件其实已全部解出。把 code 交给主线程，按 destDir 是否真的
+			// 有落盘文件来判成败，避免把能用的 mod 误报成失败。
+			safeSend({t: 'unzipResult', code: code});
 		}
 		catch (e:Dynamic)
 		{
@@ -471,6 +475,25 @@ class ZipExtractor
 				currentFile = msg.name;
 				writtenFiles.push(msg.name);
 
+			case 'unzipResult':
+				// 系统 unzip 的退出码不能一刀切：非 0 常常只是"部分条目被跳过"的警告
+				// （exit 1 = warning but completed；Apple unzip 对不支持压缩返回 81），
+				// 文件其实已全部解出。真正失败的唯一可靠信号是 destDir 里没有任何文件。
+				if (msg.code != 0)
+				{
+					var hasFiles:Bool = false;
+					try
+					{
+						if (destDir != null && FileSystem.exists(destDir))
+							hasFiles = FileSystem.readDirectory(destDir).length > 0;
+					}
+					catch (e:Dynamic) {}
+					if (hasFiles)
+						trace('[ZipExtractor] unzip exit ' + msg.code + ' but files extracted, treating as success');
+					else if (error == null)
+						error = Lang.tOr('zip.systemFail', '系统解压失败（exit ') + msg.code + Lang.tOr('zip.systemFailClose', '）');
+				}
+
 			case 'workerDone', 'workerCanceled':
 				workersDone++;
 				if (workersDone >= workerCount)
@@ -481,7 +504,16 @@ class ZipExtractor
 
 			case 'err':
 				hadError = true;
-				if (error == null) error = (msg.err == null ? 'unknown worker error' : msg.err);
+				// worker 崩溃时发来的字段是 {t:'err', msg:...}（见 runWorker/safeSend 的 catch）。
+				// 旧代码只读 msg.err → 恒为 null → 界面永远显示 "unknown worker error"，
+				// 真实异常详情被吞掉。这里按 msg → err → i18n 兜底的优先级取。
+				if (error == null)
+				{
+					var detail:Dynamic = (msg.msg != null) ? msg.msg : msg.err;
+					error = (detail == null)
+						? Lang.tOr('zip.workerFail', '解压失败（worker 异常）')
+						: Std.string(detail);
+				}
 
 			default:
 		}

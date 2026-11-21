@@ -26,7 +26,7 @@ import objects.ToggleSwitch;
  *   - 调整显示顺序（↑↓ 按钮或 ←→ 键）；FPS 数字固定为主行（不可关、不可移）。
  *
  * 数据模型：ClientPrefs.data.fpsStatsList（CSV，仅启用项，顺序即显示顺序）。
- * FPS.hx 每 100ms tick 读存档重排 → 改动即时生效（左上角计数器可实时预览）；
+ * FPS.hx 每 100ms tick 读存档 → 改动即时生效（方块徽章 / 经典样式计数器均可实时预览）；
  * 本界面只负责改清单 + 每次改动立即 ClientPrefs.saveSettings()。
  *
  * 几何与交互模板：substates.ScriptManagerSubstate（docs/UI-DESIGN.md 的面板基线）。

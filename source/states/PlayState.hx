@@ -872,9 +872,34 @@ class PlayState extends MusicBeatState
 			introSoundsSuffix = '-pixel';
 		}
 
-		add(gfGroup);
-		add(dadGroup);
-		add(boyfriendGroup);
+		// Psych 1.0.x stage editor 导出的模组：舞台背景放在 stage JSON 的 objects 里，
+		// 由引擎实例化并注册到脚本变量（模组脚本用 getVar(name) 引用/移除）。
+		// objects 为空时走原路径，零行为变化。
+		if (stageData.objects != null && stageData.objects.length > 0)
+		{
+			var _stageObjs:Map<String, Dynamic> = StageData.addObjectsToState(
+				stageData.objects,
+				!stageData.hide_girlfriend ? gfGroup : null,
+				dadGroup,
+				boyfriendGroup,
+				this
+			);
+			for (key => spr in _stageObjs)
+			{
+				if (!StageData.reservedNames.contains(key))
+					variables.set(key, spr);
+			}
+			var _objCount:Int = 0;
+			for (_k in _stageObjs.keys()) _objCount++;
+			trace('[PLAY create] stage objects: ' + _objCount);
+			LoadProbe.mark('play:stage-objects');
+		}
+		else
+		{
+			add(gfGroup);
+			add(dadGroup);
+			add(boyfriendGroup);
+		}
 
 		#if LUA_ALLOWED
 		luaDebugGroup = new FlxTypedGroup<DebugLuaText>();
@@ -2012,6 +2037,8 @@ class PlayState extends MusicBeatState
 				swagNote.holdLength = songNotes[2] != null ? songNotes[2] : 0;
 				swagNote.noteType = null;
 				swagNote.multSpeed = 1;
+				// Psych 兼容：模组脚本用 mustPress 区分玩家/对手箭头（见 CastNote 注释）
+				swagNote.mustPress = gottaHitNote;
 				swagNote.cmpSpam = null;
 				swagNote.offs = null;
 				swagNote.offsKeep = 0;
@@ -2377,6 +2404,7 @@ class PlayState extends MusicBeatState
 
 		var prev:Note = arrow;
 		var segCount:Int = floorSus + 1;
+		var segs:Array<Note> = [];
 		for (i in 0...segCount)
 		{
 			// Extra Keys：位打包低 8 位 = lane（旧 `& 3` 会把 lane≥4 截断成 0-3）
@@ -2392,6 +2420,12 @@ class PlayState extends MusicBeatState
 			seg.blockHit = (target.noteData & (1 << 14)) != 0;
 			seg.ignoreNote = (target.noteData & (1 << 15)) != 0;
 			seg.sustainLength = 0; // 段自身无长度；尾巴长度由箭头 holdLength 表达
+			// [Meteoric] 长条段必须继承箭头倍速：否则脚本给对手箭头加速后，
+			// 箭头以 2× 速度下落、尾段仍按 1× 滚动 → 长条与箭头错位。
+			// 这里只同步速度（关闭自动 resize），段长在循环结束后统一按倍速拉伸。
+			seg.skipResizeOnSpeed = true;
+			seg.multSpeed = target.multSpeed;
+			segs.push(seg);
 			var ct:String = target.noteType != null ? target.noteType : '';
 			if (ct != null && ct.length > 0) seg.noteType = ct;
 			seg.scrollFactor.set();
@@ -2416,6 +2450,19 @@ class PlayState extends MusicBeatState
 			}
 			prev = seg;
 			notes.addNoteObject(seg);
+		}
+
+		// [Meteoric] 长条段的“每段长度”由 stepCrochet×songSpeed 推出，未含 multSpeed；
+		// 箭头按 multSpeed 位移，段长也必须同倍率拉伸，否则长条会断裂/与箭头错位。
+		// 末段是圆润收尾（holdend），长度固定为 1，不参与拉伸。
+		if (target.multSpeed != 1)
+		{
+			for (s in segs)
+			{
+				if (s.isSustainEnds) continue;
+				s.scale.y *= target.multSpeed;
+				s.updateHitbox();
+			}
 		}
 	}
 
@@ -3598,8 +3645,12 @@ class PlayState extends MusicBeatState
 
 	override function destroy() {
 		#if LUA_ALLOWED
-		for (i in 0...luaArray.length) {
-			var lua:FunkinLua = luaArray[0];
+		// 快照后清空原数组：stop() 内部的 remove(this) 变成 no-op，
+		// 迭代元素与脚本一一对应；onDestroy 回调改动 luaArray 也不会导致取到 null。
+		var luaSnapshot:Array<FunkinLua> = luaArray.copy();
+		luaArray = [];
+		for (lua in luaSnapshot) {
+			if (lua == null) continue;
 			lua.call('onDestroy', []);
 			lua.stop();
 		}
@@ -3609,8 +3660,9 @@ class PlayState extends MusicBeatState
 		scripting.lua.LuaUtils.clearCustomCameras(); // 自定义相机（Camera Freedom Kit）随本局销毁
 		#end
 
-		// 镜头补间登记表（Camera Freedom Kit）随状态销毁清空
-		CameraHudDomain.cancelCameraTweens(this);
+		// 镜头补间登记表（Camera Freedom Kit）随状态销毁清空。
+		// 跳过 angle 归零：转场可能已释放 camGame.flashSprite，写 angle 会 SEGV。
+		CameraHudDomain.cancelCameraTweens(this, null, true);
 
 		#if HSCRIPT_ALLOWED
 		for (script in hscriptArray)

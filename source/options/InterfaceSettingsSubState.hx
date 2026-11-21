@@ -204,7 +204,7 @@ class InterfaceSettingsSubState extends BaseOptionsMenu
 		addOption(option);
 
 		var option:Option = new Option('FPS样式: ',
-			'设置 FPS 计数器外观：方块为半透明方形徽章（85% 不透明深色圆角底）；经典为无底色多行文本',
+			'', // 描述由语言包 optionDesc.fpsStyle 提供（zh/en 已双补；源码不留硬编码中文）
 			'fpsStyle',
 			'string',
 			['方块', '经典']);

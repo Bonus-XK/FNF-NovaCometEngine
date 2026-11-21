@@ -209,6 +209,7 @@ class MusicBeatState extends FlxUIState
 
 		updateCurStep();
 		updateBeat();
+		beatDispatch();
 
 		if (oldStep != curStep)
 		{
@@ -329,6 +330,42 @@ class MusicBeatState extends FlxUIState
 		if(curSection > lastSection) sectionHit();
 	}
 
+	/**
+	 * 节拍派发（含卡顿补发）。
+	 *
+	 * 模组演出脚本常写「第 N 拍开特效 / 第 N+1 拍关特效」（song342 的蓝色 glitch 就是
+	 * 127 开、128 关）。一帧跨过多拍时若只按最终拍号派发一次，中间那拍永远收不到回调
+	 * → 特效永久停留。这里逐拍补发；单帧最多补 MAX_BEAT_CATCHUP 拍，避免极端卡顿刷屏。
+	 *
+	 * 只补节拍不补步进：PlayState.stepHit 内含音频漂移检测（每步一次 FlxSound 时间比对），
+	 * 按 step 补发会把帧时间拖长（实测 fps 从 200+ 掉到 40）。
+	 */
+	static inline var MAX_BEAT_CATCHUP:Int = 8;
+	static var _lastDispBeat:Int = -1;
+
+	function beatDispatch():Void
+	{
+		var target:Int = curBeat;
+		if (target == _lastDispBeat) return;
+
+		// 切界面/重开曲子时 curBeat 会回退：重置基准，保证当前拍正常派发
+		if (target < _lastDispBeat) _lastDispBeat = target - 1;
+
+		var from:Int = _lastDispBeat + 1;
+		if (from < 0) from = 0;
+		if (target - from > MAX_BEAT_CATCHUP) from = target - MAX_BEAT_CATCHUP;
+
+		for (b in from...(target + 1))
+		{
+			curBeat = b;
+			curDecBeat = b;
+			beatHit();
+		}
+		curBeat = target;
+		curDecBeat = curDecStep / 4;
+		_lastDispBeat = target;
+	}
+
 	private function updateBeat():Void
 	{
 		curBeat = Math.floor(curStep / 4);
@@ -424,8 +461,8 @@ class MusicBeatState extends FlxUIState
 		Scripting.onStepHit(curStep);
 		#end
 
-		if (curStep % 4 == 0)
-			beatHit();
+		// 节拍派发已移到 update()（见 beatDispatch）：那里能对「卡顿跨拍」逐拍补发，
+		// 而 stepHit 只负责步进本身（PlayState.stepHit 含音频漂移检测，按 step 补发代价太高）。
 	}
 
 	public var stages:Array<BaseStage> = [];

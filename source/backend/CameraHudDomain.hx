@@ -659,8 +659,10 @@ class CameraHudDomain
 		ps.isCameraOnForcedPos = false;
 	}
 
-	/** 取消镜头补间：camName 为空 = 全部（重开/死亡/销毁时用），否则只取消该相机的。 */
-	public static function cancelCameraTweens(ps:PlayState, ?camName:String)
+	/** 取消镜头补间：camName 为空 = 全部（重开/死亡/销毁时用），否则只取消该相机的。
+	 *  skipAngleReset：状态销毁路径专用——此时 camGame 的 flashSprite 可能已随转场释放，
+	 *  写 angle 会走 FlxCamera.set_angle → flashSprite.rotation 解引用已销毁对象 → SIGSEGV。 */
+	public static function cancelCameraTweens(ps:PlayState, ?camName:String, skipAngleReset:Bool = false)
 	{
 		if (camName == null)
 		{
@@ -676,7 +678,7 @@ class CameraHudDomain
 			if (ps.camGame != null)
 			{
 				FlxTween.cancelTweensOf(ps.camGame, ['angle']);
-				ps.camGame.angle = 0;
+				if (!skipAngleReset) ps.camGame.angle = 0;
 			}
 		}
 		else
