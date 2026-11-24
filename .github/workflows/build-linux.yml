@@ -128,8 +128,11 @@ jobs:
         run: |
           export PATH="$HOME/haxe:$HOME/neko:$PATH"
           export NEKOPATH="$HOME/neko"
-          set -o pipefail
-          haxelib run lime build linux -release 2>&1 | tee /tmp/linux-build.log
+          # 不用 pipefail（部分 runner 的 /bin/sh 不认）：先落盘再取状态码，日志一定存在
+          haxelib run lime build linux -release > /tmp/linux-build.log 2>&1
+          rc=$?
+          tail -30 /tmp/linux-build.log || true
+          exit $rc
 
       - name: 失败时提取编译错误到注解
         if: failure()

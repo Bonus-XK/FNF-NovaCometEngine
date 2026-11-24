@@ -148,9 +148,12 @@ jobs:
       - name: 构建 Android APK
         run: |
           # Maven Central 偶发 429（Too Many Requests）导致类路径解析失败：重试一轮再放弃
-          set -o pipefail
+          # 注意：不能写成 `if ./script | tee log`——管道状态码取的是 tee（恒 0），会把失败当成功
           for i in 1 2; do
-            if ./compile-android.sh 2>&1 | tee /tmp/android-build.log; then
+            ./compile-android.sh > /tmp/android-build.log 2>&1
+            rc=$?
+            tail -30 /tmp/android-build.log || true
+            if [ $rc -eq 0 ]; then
               exit 0
             fi
             echo "==> Android 构建失败（第 $i 次），20 秒后重试..."
