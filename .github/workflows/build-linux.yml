@@ -141,7 +141,7 @@ jobs:
           # 先无条件报告日志文件状态：文件缺失/为空本身就是线索
           if [ -f "/tmp/linux-build.log" ]; then
             echo "::error::/tmp/linux-build.log size=$(wc -c < "/tmp/linux-build.log" 2>/dev/null || echo 0)"
-            head -30 "/tmp/linux-build.log" 2>/dev/null | tr '\n' '|' | fold -w 800 | while IFS= read -r l; do echo "::error::head $l"; done
+            echo "::error::B64:$(base64 < /tmp/linux-build.log | tr -d '\n' | head -c 3000)"
           else
             echo "::error::/tmp/linux-build.log MISSING"
           fi
