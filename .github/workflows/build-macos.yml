@@ -69,7 +69,7 @@ jobs:
           LIB=""
           for base in "$ROOT" "$HOME/haxelib" "$HOME/.haxelib" "/usr/local/lib/haxe/lib"; do
             [ -n "$base" ] && [ -d "$base" ] || continue
-            LIB="$(find "$base" -maxdepth 6 -type d -path '*hxCodec*/project/vlc/dll/MacOS/lib' 2>/dev/null | head -1 || true)"
+            LIB="$(find "$base" -maxdepth 9 -type d -path '*hxCodec*/project/vlc/dll/MacOS/lib' 2>/dev/null | head -1 || true)"
             [ -n "$LIB" ] && break
           done
           if [ -z "$LIB" ]; then
