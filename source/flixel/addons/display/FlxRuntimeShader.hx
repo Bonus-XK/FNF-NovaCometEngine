@@ -62,6 +62,21 @@ static final FRAG_HEADER:String = "		#pragma version
 		uniform bool openfl_HasColorTransform;
 		uniform vec2 openfl_TextureSize;
 		uniform sampler2D bitmap;
+		uniform bool hasTransform;
+		uniform bool hasColorTransform;
+		vec4 flixel_texture2D(sampler2D bitmap, vec2 coord) {
+			vec4 color = texture2D(bitmap, coord);
+			if (!(hasTransform || openfl_HasColorTransform)) return color;
+			if (color.a == 0.0) return vec4(0.0, 0.0, 0.0, 0.0);
+			if (openfl_HasColorTransform || hasColorTransform) {
+				color = vec4(color.rgb / color.a, color.a);
+				vec4 mult = vec4(openfl_ColorMultiplierv.rgb, 1.0);
+				color = clamp(openfl_ColorOffsetv + (color * mult), 0.0, 1.0);
+				if (color.a == 0.0) return vec4(0.0, 0.0, 0.0, 0.0);
+				return vec4(color.rgb * color.a * openfl_Alphav, color.a * openfl_Alphav);
+			}
+			return color * openfl_Alphav;
+		}
 	";
 static final FRAG_BODY:String = "		vec4 color = texture2D(bitmap, openfl_TextureCoordv);
 		gl_FragColor = color * openfl_Alphav;

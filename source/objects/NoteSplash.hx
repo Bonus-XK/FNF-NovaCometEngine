@@ -51,6 +51,8 @@ class NoteSplash extends FlxSprite
 	}
 
 	var maxAnims:Int = 2;
+	/** 皮肤贴图彻底缺失时只告警一次（否则每次命中刷一条）。 */
+	static var missingSkinTraced:Bool = false;
 	public function setupNoteSplash(x:Float, y:Float, direction:Int = 0, ?note:Note = null) {
 		setPosition(x - Note.swagWidth * 0.95, y - Note.swagWidth);
 		aliveTime = 0;
@@ -65,6 +67,16 @@ class NoteSplash extends FlxSprite
 			config = loadAnims(texture);
 		else
 			config = precacheConfig(_configLoaded);
+
+		// 贴图缺失：不往下走（null frames 上的 animation.play / 偏移设置会抛异常或踩空堆）。
+		// exists=false 让池子把它当死对象复用，不会再走渲染/update（update 里 aliveTime 是静态的，
+		// 这里不能去动它，否则会连坐同屏其它溅射的存活计时）。
+		if(frames == null)
+		{
+			visible = false;
+			exists = false;
+			return;
+		}
 
 		// PE 0.6.3 经典预染色皮肤（noteSplashes-063）：贴图自带四色（紫/蓝/绿/红），
 		// 直接 raw 显示即原版观感——不再走 PixelSplashShader（RGB 通道加权贴图是
@@ -161,6 +173,19 @@ class NoteSplash extends FlxSprite
 				frames = Paths.getSparrowAtlas(skin);
 			}
 			if(frames != null) skinFallbackCache.set(origSkin, skin);
+		}
+		// 连默认皮肤都解析不到（模组只提供了 XML 没有 PNG / 该皮肤名在模组里根本不存在）：
+		// 旧实现会继续 addByPrefix → 在 null frames 上取帧 → update 里抛异常，整局炸在首次命中。
+		// 这里直接标记「本局无溅射」，让 setupNoteSplash 走隐藏分支。
+		if(frames == null)
+		{
+			if(!missingSkinTraced)
+			{
+				missingSkinTraced = true;
+				trace('[NoteSplash] skin not found, splashes disabled this song: ' + skin);
+			}
+			maxAnims = 0;
+			return null;
 		}
 		config = precacheConfig(skin);
 		_configLoaded = skin;

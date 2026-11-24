@@ -1,27 +1,23 @@
-# NovaComet Engine v1.2.0 Pre-release 3 — "crazymidnight"
+# NovaComet Engine v1.2.0 Pre-release 4 — "stagecraft"
 
-> 基于 Psych Engine 0.7.1h 深度魔改的 FNF 引擎。**v1.2.0 Pre-release 3（代号 crazymidnight）** 汇总 Pre-release 2（mooncat，`v1.2.0-20261108-1710`）以来的全部更新：模组谱面压缩 `.mec`、模表（Modchart）运行时与编舞编辑器、JS 脚本层、TCM 真舞台、四代 Psych 模组兼容接线，以及一批游玩/存档/性能与判定线高亮修复。
+> 基于 Psych Engine 0.7.1h 深度魔改的 FNF 引擎。**v1.2.0 Pre-release 4（代号 stagecraft）** 汇总 Pre-release 3（crazymidnight）以来的更新，主题是**老世代模组的演出兼容**：macOS 原生视频层、Psych 0.6.3 的 `vlc.MP4Handler` 兼容壳、8K 角色图集绘制，以及脚本层一批“代码写了但从未执行”的坑。验收样本是 PE 0.6.3 制作的 `Megamix2-LeafTeam`（1.1GB、11 分钟整曲、背景视频 + 相机后处理 + 90 个角色）。
 
 ---
 
 ## ✨ 版本亮点
 
-- **模组谱面压缩 `.mec`**：64B 头（MEC1 / version / flags / 尺寸 / crc32 / blockSize）+ 原 JSON 前 8192B 未压缩预览；三 codec 全部字节级无损（deflate 单流 / LZMA 16MB 分块 / struct 列式 LZMA1 帧 + 原字节字典重建元组）。同一 648.9MiB 粪谱实测：deflate L9 10.8MiB → LZMA 6.85MiB → **struct 857.4KiB（739×）**。CLI `tools/chartpack/chartpack.py`（pack/unpack/info/verify/scancheck/selftest），路径统一走 `Paths.chartPath()`；只有 `.mec` 存在时生效，无压缩文件零行为变化。
-- **模表运行时**（FNF-Modcharting-Tools v1.0.1 移植，默认关）：~35 内建修饰器 + hscript 自定义修饰器、多 Playfield、3D 透视渲染器、`modchart.json` 按拍事件排程（ease/set/hscript）、1–12 键泛化。接管绘制但音符生成 / 判定 / 丢失 / 结算零侵入；无模表数据的谱面零开销。
-- **编舞编辑器与 TCM 真舞台**：`ChoreoEditorState` 镜头与事件轨道编排（cam 事件合并/预览），`StageTcm` 作为引擎真舞台（背景覆盖按实测几何校正、zoom / 素材缩放 / 角色位统一），`CameraEditorData` / `ChoreoEase` 支撑事件数据与缓动。
-- **JS 脚本层**（默认关）：QuickJS 2024-01-13 `@:native` 静态绑定（`third_party/quickjs/` + `QjsNative.hx`），不产 ndll、不改 codesign；脚本发现与 `HostDomain.callOnScripts/setOnScripts` 派发已接入。
-- **Psych 四代模组兼容**：0.6.3 Lua 兼容总开关（哨兵数字 / version / changePresence 空桩）、0.7.3 脚本 API 与五个 Pre 系回调取消语义分流、模组管理页「引擎版本」手动循环匹配（持久化 `meteoric-mod-versions.txt`；指纹自动识别方案已废弃）；两代模组可同场混跑，legacy 模组手动启用不受 1.0.4 开关限制。
-- **转场 / 脚本 / i18n**：FADE（默认）/ MOVE / METEOR / STAR 四档转场重构（ErrorState 不挂转场、横幅类 close）；语言包扩充与 `tools/i18n/check_i18n.py` 门禁；HScript 脚本层 `String.trim/replace` 空指针类坑的兜底与状态脚本生命周期修正。
-- **全局 CRT 帧数优化（CRT Lite，默认）**：原版 Lottes 后处理每像素 43 次纹理采样（Tri 11 + Bloom 31 + alpha）+ 线性/伽马 `pow`；新增平替分支只取 4 次采样（中心 + R/B 色差 + alpha），用解析式扫描线替代多行高斯卷积，保留桶形畸变、扫描线、shadow mask、暗角与色差。不降采样、不增纹理/离屏缓存、不额外 pass。本机 macOS 真机 A/B：稳态帧数中位数 **285 → 583 FPS（约 2×）**；原版效果可回退：`METEORIC_CRT_CLASSIC=1`、脚本 `quality=1` 或 `setGlobalShader('crt', {quality: 1})`。
+- **macOS 视频层打通**：`VIDEOS_ALLOWED` 增加 mac。hxCodec 3.0.2 无需单独编 ndll（`@:include` + `@:buildXml` 把 libvlc 直接链进主程序），真正的坑是 haxelib 包内 `libvlc.dylib` / `libvlccore.dylib` 被 zip 压成了 14 字节文本（软链丢失）——现在由构建脚本还原软链，app 包内自带 `MacOS/lib/*.dylib` 与 347 个 VLC 插件。实测 1920×960 HEVC 整曲播放正常。
+- **`vlc.MP4Handler` 兼容壳（Psych 0.6.3）**：新增 `source/vlc/MP4Handler.hx`，实现 `playVideo` / `bitmapData` / `volume` / `time` / `pause` / `resume` / `visible` / `update`。0.6.x 模组把视频帧当 BitmapData 贴到 Lua 精灵上做背景，接口一一对齐；`visible` 映射到 alpha（hxCodec 的帧上传受 `__renderable` 门控，真设 `visible=false` 会把上传一起停掉）。
+- **8K 图集角色不再隐身**：`Paths.image()` 的 GPU 缓存对大于 4096 的位图关闭。大图上传纹理后，tile 渲染器按图集帧矩形采样会取到全透明且不报错；小图因为先进 `packImageIntoAtlas`（普通纹理）不受影响——这正是“场景/音符都正常、只有角色不显示”的根因。
+- **脚本层三处“代码从未跑过”的修复**：① `initHaxeModuleCode` 把整段代码当文件路径传给 HScript，导致**每个脚本的第一条 `runHaxeCode` 永远不执行**；② `FlxRuntimeShader` 的运行时 FRAG_HEADER 缺 `flixel_texture2D`，模组 shader（`#define texture flixel_texture2D`）编译必失败；③ macOS 上 `setSpriteShader` 直接拒绝挂载、`runHaxeCode` 见 `.shader` 就整段跳过。
 
-## 🛠 自 Pre-release 2 以来的修复
+## 🛠 自 Pre-release 3 以来的修复
 
-- **modchart 长条渲染**：渲染器接管绘制时 `SustainStrip` 从 `updateFramePixels()` 拿到 null（tile 渲染不生成 framePixels），`loadGraphic(null)` 静默失败 → 长条网格整批隐身。改用音符图集 + `frame.uv` 采样，零额外纹理、可合批、保留 RGB 染色；真机确认长条可见。
-- **判定线高亮**：AutoPlay 命中高亮与人物动画共用批处理节流标志，导致高亮被整批跳过；改为独立节流。长条按住期间按 parent 剩余时长续住 `confirm`（`Math.max` 防短命中截短），玩家侧与**对手侧**（含 `NoteHoldCover` 覆盖层）均可持续亮；对手轨偏移改用 `ExtraKeys.songKeys` 适配 >4K。
-- **存档 / 界面稳定性**：存档迁移 JSON 备份不再动态补写匿名对象字段（修迁移期启动即退）；偏移校准返回时落盘 `ClientPrefs`；自由模式返回按钮命中独占 + 行热区禁区（修下滚后误进曲）；FPS 统计编辑器补 `ToggleSwitch.destroy()` 配对与选中态 alpha。
-- **性能**：Lua `getMouseX/getMouseY` 复用 `FlxPoint`、崩溃回调上下文去重先比分量再拼串、`_settleAnimDone` 每帧 new 数组改原地清零；游玩期分配压平、进曲洪峰 GC 自适应（堆 >256MB 才跑 major）。
-- **TCM 曲目演出**：背景覆盖与镜头瞬移按真机实测校正；中段 modchart 最终收敛为「箭头左右摇摆」——`TipsyX` 按轨相位摇摆（speed 子值提速）+ 全轨 `X` 整体大幅左右摆动（每 2 拍换向）+ 少量 `BeatY` 节拍，撤掉会让相邻轨音符汇聚交叉、读谱难的 3D/旋转/压缩族效果。
-- **清理与归档**：`source/` 遗留备份与未用代码移入 `archives/`（不参与编译、清理检索污染）；Vulkan 实验轨整条删除，仅在 `docs/VULKAN-ROADMAP.md` 留废弃归档（本版未恢复该轨）。
+- **堆崩溃（SIGABRT / 二次释放）**：`removeLuaSprite(tag, true)` 直接 `destroy()` 会把精灵当前帧（与同图集角色共用的 `FlxFrame`）的 parent 置 null、rect 归还池——同图集角色随即画不出来，重复销毁则 `malloc: pointer being freed was not allocated`。改为先摘 `frames` 与 `_frame`/`_frameGraphic` 再销毁；密集谱“每颗音符建 ghost 再删”的写法不再崩。
+- **macOS shader 容器**：`setSpriteShader` 不再直接 return false，改为“挂载 + 登记”，入列（`addLuaSprite` / `addInstance`）前自动摘除；`runHaxeCode` 的 `.shader` 拦截收窄为只拦**赋值**，放行 `new ShaderFilter(sprite.shader)` 这类只读用法，相机后处理路径在 macOS 上恢复。
+- **HScript 类反射**：`MP4Handler` 这类“只被脚本 `new` 出来”的类，`@:keep` 不足以进构建，需 `--macro include('vlc')`；`addHaxeLibrary` 在 `onCreate` 阶段 `funk.hscript` 仍为 null，注册不进去，改在 `HScript.preset()` 预注册；属性访问器不能 `inline`（hxcpp 无函数指针，反射取到 null）。
+- **NoteSplash 兜底**：皮肤贴图彻底缺失（模组只给了 XML 或皮肤名不存在）时不再往 null frames 上 `addByPrefix`，本局直接跳过溅射且不刷屏。
+- **CI**：`build-macos.yml` 增加 hxCodec 软链还原步骤（幂等），保证 macOS x86_64 / arm64 两条产物都能链接 VLC。
 
 ---
 

@@ -6,6 +6,27 @@ import flixel.addons.display.FlxRuntimeShader;
 
 class ShaderFunctions
 {
+	#if mac
+	/**
+	 * macOS：已经由 `setSpriteShader` 挂上 runtime shader 的精灵。
+	 * 这类精灵**一旦被绘制**就会 SIGSEGV（见 setSpriteShader 的注释），所以任何「进入显示列表」的
+	 * 入口都要先调 `stripMacShaderIfAdded` 把 shader 摘掉；只当 shader 容器、从不入列的精灵
+	 * （Psych 模组的通用写法：拿 .shader 去 new ShaderFilter 挂相机）保留 shader，相机后处理才可用。
+	 */
+	public static var macShadedSprites:Map<FlxSprite, Bool> = new Map();
+
+	/** 入列前摘除 macOS runtime shader（非 FlxSprite / 未登记则原样返回）。 */
+	public static function stripMacShaderIfAdded(obj:Dynamic):Void
+	{
+		if (obj == null || !Std.isOfType(obj, FlxSprite)) return;
+		var spr:FlxSprite = cast obj;
+		if (spr.shader == null || !macShadedSprites.exists(spr)) return;
+		spr.shader = null;
+		macShadedSprites.remove(spr);
+		trace('[addSprite] macOS: runtime shader stripped before adding (would crash renderer)');
+	}
+	#end
+
 	public static function implement(funk:FunkinLua)
 	{
 		var lua = funk.lua;
@@ -42,11 +63,23 @@ class ShaderFunctions
 			if(leObj != null) {
 				backend.CrashHandler.logEvent('setSpriteShader: ' + obj + ' <- ' + shader);
 				#if mac
-				// macOS：sprite 级 shader 在渲染时必崩（实测极简 shader 也崩，与内容无关），
-				// 且 FlxSprite.shader 无 setter、子类无法拦截，只能在此跳过挂载。
-				// 模组无需改写；Windows/Linux 走原生行为。
-				trace('[setSpriteShader] macOS 跳过 sprite shader（渲染层会崩）: ' + obj + ' <- ' + shader);
-				return false;
+				// macOS：sprite 级 shader 在**渲染时**必崩（实测极简 shader 也崩，与内容无关），
+				// 且 FlxSprite.shader 无 setter、子类无法拦截。
+				// 旧行为是直接 return false —— 但 Psych 模组普遍把「不加入场景的空精灵」当 shader 容器：
+				//   makeLuaSprite('camShader'); setSpriteShader('camShader', 'bloom');
+				//   runHaxeCode("FlxG.game.setFilters([new ShaderFilter(game.getLuaObject('camShader').shader)])")
+				// 这种情况下 shader 从不被绘制，挂上完全安全，而 .shader 为 null 会让 ShaderFilter 拿到空对象。
+				// 因此改为：照常挂载并登记；一旦该精灵要进显示列表（addLuaSprite / addInstance），
+				// 入列前自动摘掉 shader（等价旧行为：能显示、无 sprite 级特效，不崩）。
+				var macArr:Array<String> = funk.runtimeShaders.get(shader);
+				if(macArr == null) {
+					trace('[setSpriteShader] macOS: shader source missing, skip: ' + shader);
+					return false;
+				}
+				leObj.shader = new FlxRuntimeShader(macArr[0], macArr[1]);
+				macShadedSprites.set(leObj, true);
+				trace('[setSpriteShader] macOS attached as shader container (stripped if added): ' + obj + ' <- ' + shader);
+				return true;
 				#else
 				var arr:Array<String> = funk.runtimeShaders.get(shader);
 				leObj.shader = new FlxRuntimeShader(arr[0], arr[1]);

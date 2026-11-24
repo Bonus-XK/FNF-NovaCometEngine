@@ -223,6 +223,12 @@ class ObjectCommands
 			}
 			if (mySprite == null) return;
 
+			#if mac
+			// macOS：挂过 runtime shader 的精灵一旦入列绘制就 SIGSEGV，入列前必须先摘掉
+			//（等价旧行为：能显示但无 sprite 级 shader 特效；相机 ShaderFilter 不受影响）。
+			scripting.lua.ShaderFunctions.stripMacShaderIfAdded(mySprite);
+			#end
+
 			if (front)
 			{
 				LuaUtils.getTargetInstance().add(mySprite);
@@ -315,6 +321,18 @@ class ObjectCommands
 
 			LuaUtils.getTargetInstance().remove(pee, true);
 			if(destroy) {
+				// ⚠ 共享图集保护：Lua 精灵的 frames 基本都来自 Paths.getAtlas() 的**缓存集合**，
+				// 与同图集的主角/舞台精灵共用同一批 FlxFrame。FlxSprite.destroy() 会执行
+				// `_frame = FlxDestroyUtil.destroy(_frame)`，把当前帧的 parent 置 null、rect 归还
+				// FlxRect 池 —— 于是同一个图集的角色随即「画不出来」，重复销毁还会把同一块 rect
+				// 二次归还 → malloc: pointer being freed was not allocated（megamix2 每颗音符
+				// 建 ghost、tween 结束 removeLuaSprite(..., true) 就稳定踩这条）。
+				// 先摘掉 frames 与当前帧引用，再 destroy，销毁就只发生在这个精灵自身。
+				pee.frames = null;
+				@:privateAccess {
+					pee._frame = null;
+					pee._frameGraphic = null;
+				}
 				pee.destroy();
 				game.modchartSprites.remove(tag);
 			}

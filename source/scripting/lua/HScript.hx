@@ -40,6 +40,11 @@ class HScript
 	/** 全局脚本注册表：按文件路径缓存 HScript 实例（替代 SScript.global）。 */
 	public static var globalScripts:Map<String, HScript> = new Map();
 
+	#if mac
+	/** macOS：识别 sprite shader **赋值**（`x.shader = ...`，含空格；不匹配 `==`）。 */
+	static var shaderAssignRe:EReg = ~/\.\s*shader\s*=(?!=)/;
+	#end
+
 	/** 脚本是否处于激活状态。 */
 	public var active:Bool = true;
 
@@ -62,7 +67,14 @@ class HScript
 		if(hs == null)
 		{
 			trace('initializing haxe interp for: ${parent.scriptName}');
-			parent.hscript = new HScript(parent, cleaned);
+			// 注意：不能 new HScript(parent, cleaned) —— 构造函数的第 2 参是**文件路径**，
+			// 传代码进去会走 executeFromFile() → File.getContent(<整段代码>) 抛异常，
+			// 日志形如 `Error reading trace(...): [file_contents,...]`，于是每个脚本的
+			// **第一条** runHaxeCode 永远不会执行（Meteoric 2026-11-24 实测；megamix2 的
+			// zhuoSeQi2.lua 只有一条 runHaxeCode，整段相机 ShaderFilter 因此从未生效）。
+			// 正确做法：以 executeNow=false 建解释器，再用 executeCodeString 执行代码。
+			parent.hscript = new HScript(parent, null, false);
+			parent.hscript.executeCodeString(cleaned);
 		}
 		else
 		{
@@ -384,17 +396,22 @@ class HScript
 			var retVal:SCall = null;
 			if (codeToRun != null && codeToRun.indexOf('FlxBackdrop') >= 0)
 				trace('[RHX] FlxBackdrop code len=' + codeToRun.length + ' head=' + codeToRun.substr(0, 60).replace('\n', ' '));
-			// ⚠ macOS 平台保护：sprite 级 shader 赋值会让渲染层原生崩溃。
+			// ⚠ macOS 平台保护：sprite 级 shader **赋值**会让渲染层原生崩溃。
 			// 2026-10-31 实测：macOS + flixel 6.2 + 当前 openfl 下，只要执行
 			// `spr.shader = <任意 shader 或 null>`（包括极简 `void main(){gl_FragColor=vec4(1,0,0,1);}`）
 			// 就在渲染时 SIGSEGV，与 shader 内容无关；应用层无法 try/catch（驱动直接 abort）。
-			// FlxSprite.shader 是无 setter 的普通字段，子类也无法遮蔽拦截，
-			// 因此只能在「执行 HScript 代码」这一层做过滤 —— 让模组无需改写，
-			// 只是这些 sprite shader 特效不显示（相机 filter 路径不受影响，仍可用）。
+			// FlxSprite.shader 是无 setter 的普通字段，子类也无法遮蔽拦截。
+			//
+			// 2026-11-24：拦截从「code 里出现 .shader 就整段跳过」收窄为「只拦赋值（.shader =）」。
+			// 原因：Psych 模组的相机后处理写法是**读** sprite 的 shader 去构造 ShaderFilter ——
+			//   setSpriteShader('camShader', 'bloom')   // 空精灵当容器，永不入列
+			//   runHaxeCode("FlxG.game.setFilters([new ShaderFilter(game.getLuaObject('camShader').shader)])")
+			// 旧拦截把这类代码整段吞掉 → 所有相机 shader 特效在 macOS 上永久失效。
+			// 赋值依旧拦死（那才是崩溃源），读取放行；入列时由 ShaderFunctions.stripMacShaderIfAdded 收尾。
 			#if mac
-			if (codeToRun != null && codeToRun.indexOf('.shader') >= 0)
+			if (codeToRun != null && shaderAssignRe.match(codeToRun))
 			{
-				trace('[runHaxeCode] macOS 跳过含 sprite.shader 的代码（渲染层会崩）| '
+				trace('[runHaxeCode] macOS skip code assigning sprite.shader (renderer crash) | '
 					+ funk.scriptName);
 				return null;
 			}
@@ -475,6 +492,12 @@ class HScript
 	public function preset():Void
 	{
 		// Some very commonly used classes
+		// Psych 0.6.3 兼容：模组用 `addHaxeLibrary('MP4Handler','vlc')` + `new MP4Handler()`。
+		// addHaxeLibrary 只在 funk.hscript 已存在时才写进 interp（onCreate 阶段往往是 null），
+		// 所以这里预注册一份，保证任何时机 `new MP4Handler()` 都能解析到。
+		#if VIDEOS_ALLOWED
+		set('MP4Handler', vlc.MP4Handler);
+		#end
 		set('FlxG', flixel.FlxG);
 		set('FlxSprite', flixel.FlxSprite);
 		set('FlxCamera', flixel.FlxCamera);

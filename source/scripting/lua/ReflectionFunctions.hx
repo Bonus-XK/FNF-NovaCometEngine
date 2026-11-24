@@ -170,6 +170,10 @@ class ReflectionFunctions
 			if(PlayState.instance.variables.exists(objectName))
 			{
 				var obj:Dynamic = PlayState.instance.variables.get(objectName);
+				#if mac
+				// 同 addLuaSprite：macOS 上挂着 runtime shader 的精灵不能进显示列表
+				ShaderFunctions.stripMacShaderIfAdded(obj);
+				#end
 				if (inFront)
 					LuaUtils.getTargetInstance().add(obj);
 				else

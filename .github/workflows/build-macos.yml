@@ -56,6 +56,26 @@ jobs:
           export NEKOPATH="$HOME/neko"
           bash ci/install-deps.sh
 
+      # hxCodec 3.0.2 的 haxelib 包里 libvlc.dylib / libvlccore.dylib 被压成了 14 字节
+      # 纯文本（zip 未保留软链，内容就是目标文件名）。macOS 上 VIDEOS_ALLOWED 会直接
+      # 链接这两个名字 —— 不还原成真软链，ld 会在链接期报找不到库。
+      # 幂等：已是软链时 ln -sf 无副作用。
+      - name: 修补 hxCodec 的 macOS dylib 软链
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/haxe:$HOME/neko:$PATH"
+          HC="$(haxelib path hxCodec 2>/dev/null | head -1)"
+          HC="${HC%/src}"
+          LIB="$HC/project/vlc/dll/MacOS/lib"
+          if [ -d "$LIB" ]; then
+            ln -sf libvlc.5.dylib   "$LIB/libvlc.dylib"
+            ln -sf libvlccore.9.dylib "$LIB/libvlccore.dylib"
+            ls -l "$LIB"/libvlc.dylib "$LIB"/libvlccore.dylib
+          else
+            echo "hxCodec macOS lib dir not found: $LIB" >&2
+            exit 1
+          fi
+
       # 官方 hxcpp 4.3.2 的 mac 编译器走 `xcrun --sdk macosx${MACOSX_VER}` 别名解析；
       # macos-26 镜像上别名拼法对不上（"SDK macosx26 cannot be located"，2026-11-01 实锤）。
       # 与本机 2026-10-18 的工具链补丁同思路：换绝对路径 clang++，isysroot 用 MacOSX.sdk

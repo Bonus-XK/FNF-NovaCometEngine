@@ -10,7 +10,7 @@ import flixel.math.FlxPoint;
 import flixel.math.FlxRect;
 
 import openfl.display.BitmapData;
-import openfl.display3D.textures.RectangleTexture;
+import openfl.display3D.textures.Texture;
 import openfl.utils.AssetType;
 import openfl.utils.Assets as OpenFlAssets;
 import openfl.system.System;
@@ -1069,12 +1069,22 @@ class Paths
 				}
 				catch (e:Dynamic) {}
 			}
-			if (allowGPU && ClientPrefs.data.cacheOnGPU)
+			// 超大位图（>4096 任一维）不进 GPU 缓存：这类图基本都是角色/背景图集，
+			// 上传成纹理后 flixel 的 tile 渲染器按帧矩形采样会取不到像素（整片透明、不报错），
+			// 而同图集用 CPU 位图绘制完全正常（2026-11-24 megamix2「无人物」实测：
+			// Paths.imageFresh 走 CPU 时角色立刻显形）。代价只是这些大图保留 CPU 像素。
+			if (allowGPU && ClientPrefs.data.cacheOnGPU && bitmap.width <= 4096 && bitmap.height <= 4096)
 			{
 				// context3D 未就绪（加载界面早期）时 GPU 上传会失败 → 回退 CPU 位图，避免贴图加载失败
 				try
 				{
-					var texture:RectangleTexture = FlxG.stage.context3D.createRectangleTexture(bitmap.width, bitmap.height, BGRA, true);
+					// ⚠ 必须用**普通纹理**（createTexture），不能用 createRectangleTexture：
+					// flixel 的 tile 着色器声明的是 `uniform sampler2D bitmap`，矩形纹理只能由
+					// sampler2DRect 采样 —— 用矩形纹理时采样恒为 0，精灵变全透明且不报错。
+					// 小图因为先进 packImageIntoAtlas（普通纹理）所以看不出问题；大图（角色 8K 图集、
+					// 大背景）走这条 GPU 路径就会整片消失 —— megamix2 的「无人物」即此
+					// （2026-11-24 实测：Paths.imageFresh 走 CPU 位图时同图集能正常绘制）。
+					var texture:Texture = FlxG.stage.context3D.createTexture(bitmap.width, bitmap.height, BGRA, true);
 					texture.uploadFromBitmapData(bitmap);
 					bitmap.image.data = null;
 					bitmap.dispose();
