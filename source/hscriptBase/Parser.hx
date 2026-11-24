@@ -722,7 +722,11 @@ class Parser {
 		}
 	}
 
-	function parseStructure(id, ?t : TrickyToken , ?d : DynamicToken) {
+	// sscript 4.0.1 的 `TrickyToken` / `DynamicToken`（hscriptBase 包里的结构化 typedef）
+	// 在 haxelib 上已被 25.0.0 整体替换（`haxelib install SScript 4.0.1` 也会拿到 25.0.0，
+	// 后者不再有这两个类型）→ CI 编译直接 `Type not found : TrickyToken`。
+	// 这两个参数在本文件里只用于 `if (t == null)` 判空，改成 Dynamic 语义不变、跨版本可用。
+	function parseStructure(id, ?t : Dynamic , ?d : Dynamic) {
 		#if hscriptPos
 		var p1 = tokenMin;
 		#end
