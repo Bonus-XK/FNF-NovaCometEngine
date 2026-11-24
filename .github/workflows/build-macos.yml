@@ -62,19 +62,23 @@ jobs:
       # 幂等：已是软链时 ln -sf 无副作用。
       - name: 修补 hxCodec 的 macOS dylib 软链
         run: |
-          set -euo pipefail
+          set -uo pipefail
           export PATH="$HOME/haxe:$HOME/neko:$PATH"
-          HC="$(haxelib path hxCodec 2>/dev/null | head -1)"
-          HC="${HC%/src}"
-          LIB="$HC/project/vlc/dll/MacOS/lib"
-          if [ -d "$LIB" ]; then
-            ln -sf libvlc.5.dylib   "$LIB/libvlc.dylib"
-            ln -sf libvlccore.9.dylib "$LIB/libvlccore.dylib"
-            ls -l "$LIB"/libvlc.dylib "$LIB"/libvlccore.dylib
-          else
-            echo "hxCodec macOS lib dir not found: $LIB" >&2
-            exit 1
+          export NEKOPATH="$HOME/neko"
+          ROOT="$(haxelib config 2>/dev/null | head -1 || true)"
+          LIB=""
+          for base in "$ROOT" "$HOME/haxelib" "$HOME/.haxelib" "/usr/local/lib/haxe/lib"; do
+            [ -n "$base" ] && [ -d "$base" ] || continue
+            LIB="$(find "$base" -maxdepth 6 -type d -path '*hxCodec*/project/vlc/dll/MacOS/lib' 2>/dev/null | head -1 || true)"
+            [ -n "$LIB" ] && break
+          done
+          if [ -z "$LIB" ]; then
+            echo "::warning::hxCodec macOS lib dir not found (haxelib config: ${ROOT:-<empty>}); 视频链接可能失败"
+            exit 0
           fi
+          ln -sf libvlc.5.dylib "$LIB/libvlc.dylib"
+          ln -sf libvlccore.9.dylib "$LIB/libvlccore.dylib"
+          ls -l "$LIB/libvlc.dylib" "$LIB/libvlccore.dylib"
 
       # 官方 hxcpp 4.3.2 的 mac 编译器走 `xcrun --sdk macosx${MACOSX_VER}` 别名解析；
       # macos-26 镜像上别名拼法对不上（"SDK macosx26 cannot be located"，2026-11-01 实锤）。
