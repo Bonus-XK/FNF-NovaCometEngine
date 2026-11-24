@@ -30,12 +30,13 @@ install hxcpp 4.3.2
 # 但 hscriptBase/ex 的内部 API 全变）。引擎的 ex/ 与 source/hscriptBase/Parser.hx 是按 4.0.1
 # 分叉的，所以直接用**仓库内锁定的 4.0.1 源码**铺进 haxelib 目录，保证与本机开发环境一致。
 install_sscript_vendored() {
-  local dst="$HOME/haxelib/SScript/4.0.1"
-  rm -rf "$dst"
-  mkdir -p "$dst"
-  cp -R third_party/sscript/src "$dst/src"
-  cp third_party/sscript/haxelib.json "$dst/haxelib.json"
-  echo "==> SScript 4.0.1（仓库内源码）→ $dst"
+  local root repo
+  repo="$(cd "$(dirname "$0")/.." && pwd)"
+  root="$repo/third_party/sscript"
+  [ -f "$root/haxelib.json" ] || { echo "缺少 $root/haxelib.json" >&2; exit 1; }
+  # haxelib dev 直接把这个目录注册成 “SScript 4.0.1 [dev]”，不需要猜 haxelib 的目录规范化
+  haxelib dev SScript "$root"
+  echo "==> SScript 已注册为 dev: $root"
 }
 install_sscript_vendored
 install hxCodec 3.0.2
