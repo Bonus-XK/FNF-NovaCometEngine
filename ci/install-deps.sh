@@ -26,7 +26,18 @@ install flixel 5.2.2  # 本机激活版本（6.2.0 需要 flixel-addons >= 3.3.0
 install flixel-ui 2.5.0
 install flixel-addons 3.0.2
 install hxcpp 4.3.2
-install SScript 4.0.1
+# SScript：haxelib 上的 “4.0.1” 已被上游用 25.0.0 的内容顶替（zip 里 version 仍写 4.0.1，
+# 但 hscriptBase/ex 的内部 API 全变）。引擎的 ex/ 与 source/hscriptBase/Parser.hx 是按 4.0.1
+# 分叉的，所以直接用**仓库内锁定的 4.0.1 源码**铺进 haxelib 目录，保证与本机开发环境一致。
+install_sscript_vendored() {
+  local dst="$HOME/haxelib/SScript/4.0.1"
+  rm -rf "$dst"
+  mkdir -p "$dst"
+  cp -R third_party/sscript/src "$dst/src"
+  cp third_party/sscript/haxelib.json "$dst/haxelib.json"
+  echo "==> SScript 4.0.1（仓库内源码）→ $dst"
+}
+install_sscript_vendored
 install hxCodec 3.0.2
 install tjson 1.4.0
 # hscript：引擎脚本解释器已独立为 hscript-meteoric（见下方 git 依赖，接管原 source/hscript 内嵌源码树）。
