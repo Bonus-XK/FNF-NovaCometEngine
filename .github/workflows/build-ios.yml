@@ -104,7 +104,22 @@ jobs:
         run: |
           export PATH="$HOME/haxe:$HOME/neko:$PATH"
           export NEKOPATH="$HOME/neko"
-          haxelib run lime build ios -release -nosign
+          set +e
+          haxelib run lime build ios -release -nosign > /tmp/ios-build.log 2>&1
+          rc=$?
+          tail -30 /tmp/ios-build.log || true
+          exit $rc
+
+      - name: 失败时提取编译错误到注解
+        if: failure()
+        run: |
+          if [ -f "/tmp/ios-build.log" ]; then
+            echo "::error::/tmp/ios-build.log size=$(wc -c < "/tmp/ios-build.log" 2>/dev/null || echo 0)"
+            echo "::error::B64:$(base64 < /tmp/ios-build.log | tr -d '\n' | head -c 3000)"
+          else
+            echo "::error::/tmp/ios-build.log MISSING"
+          fi
+          exit 0
 
       - name: 打包未签名 IPA（Payload/Meteoric.app）
         run: |
