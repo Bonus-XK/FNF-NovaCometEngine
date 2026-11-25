@@ -107,8 +107,9 @@ jobs:
       - name: 补齐 qjs.xml 的相对查找路径
         run: |
           mkdir -p export
-          ln -sfn ../third_party export/third_party
-          ls -l export/third_party/qjs.xml
+          # 用**绝对**目标：若 export 本身是软链（构建缓存），相对目标会解析到别处
+          ln -sfn "$GITHUB_WORKSPACE/third_party" export/third_party
+          ls -l export/third_party/qjs.xml || { echo "::error::软链后仍找不到 qjs.xml"; pwd; ls -l export | head; exit 1; }
 
       - name: 构建 iOS（未签名 device 构建）
         run: |
