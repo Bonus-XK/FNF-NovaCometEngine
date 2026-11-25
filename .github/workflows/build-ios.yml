@@ -115,7 +115,8 @@ jobs:
         run: |
           if [ -f "/tmp/ios-build.log" ]; then
             echo "::error::/tmp/ios-build.log size=$(wc -c < "/tmp/ios-build.log" 2>/dev/null || echo 0)"
-            echo "::error::B64:$(base64 < /tmp/ios-build.log | tr -d '\n' | head -c 3000)"
+            echo "::error::B64E:$(grep -i -a "error" /tmp/ios-build.log | tail -25 | base64 | tr -d '\n' | head -c 3000)"
+            echo "::error::B64T:$(tail -c 2200 /tmp/ios-build.log | base64 | tr -d '\n' | head -c 3000)"
           else
             echo "::error::/tmp/ios-build.log MISSING"
           fi
