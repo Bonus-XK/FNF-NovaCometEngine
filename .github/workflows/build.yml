@@ -1,17 +1,17 @@
 # ============================================================
 # Meteoric Engine 全端构建编排器
 # 触发: push / pull_request / 手动（workflow_dispatch）
-# 构建: Android / Windows x64+x86 / macOS x86_64+arm64 / Linux x86_64 / iOS 未签名 IPA
+# 构建: Android / Windows x64+x86 / macOS x86_64+arm64 / Linux x86_64
+#       （iOS 已下线：xcodebuild + qjs 相对路径长期不稳，2026-11-25 由用户决定移除）
 #
 # 结构（2026-11，Seiun Engine 式拆分）:
-#   - 各平台构建拆到 .github/workflows/build-{android,windows,macos,linux,ios}.yml
+#   - 各平台构建拆到 .github/workflows/build-{android,windows,macos,linux}.yml
 #     （workflow_call 可复用 + 可单独手动派发），本文件只做编排与发布；
 #   - hxcpp 编译缓存（HXCPP_COMPILE_CACHE）在各平台 workflow 内，跨 run 增量编译；
 #   - Windows 额外产出崩溃符号 artifact（.map + 配对 exe + build-info，90 天），
 #     供 CrashHandler 的 native_crash 报告做符号化定位；
 #   - 构建全部成功后自动发布 Pre-release（PR 不发布），产物带版本号 + SHA256SUMS。
-#   - Linux / iOS 是 SDL3 移植观察期新增端：continue-on-error 非阻塞 + 发布产物可选，
-#     首个绿灯后把 linux/ios 加进 release.needs 并去掉可选逻辑。
+#   - Linux 是 SDL3 移植观察期新增端；iOS 发布链已移除（构建产物不再参与 release）。
 #
 # 历史提速要点（2026-08，保留）:
 #   1) haxelib 依赖与 /tmp/lime-full（SDL3 lime 源码树）进 actions/cache；
@@ -59,7 +59,7 @@ jobs:
     uses: ./.github/workflows/build-macos.yml
     secrets: inherit
 
-  # ---------- Linux / iOS（2026-11-02 转正） ----------
+  # ---------- Linux（2026-11-02 转正；iOS 已于 2026-11-25 下线） ----------
   # SDL3 移植观察期结束：两端连续绿灯且产物已随 v1.2.0-20261102-0728 发布，
   # 现为发布阻塞端（continue-on-error 已随转正移除）。
   linux:
@@ -67,16 +67,11 @@ jobs:
     uses: ./.github/workflows/build-linux.yml
     secrets: inherit
 
-  ios:
-    name: iOS (未签名 IPA)
-    uses: ./.github/workflows/build-ios.yml
-    secrets: inherit
-
   # ---------- 发布 Pre-release ----------
   # 五个平台全部成功后自动创建 GitHub Pre-release（PR 不发布）。
   release:
     name: 发布 Pre-release
-    needs: [android, windows, macos, linux, ios]
+    needs: [android, windows, macos, linux]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -114,8 +109,7 @@ jobs:
           test -d release-artifacts/meteoric-macos-x64/Meteoric.app
           test -d release-artifacts/meteoric-macos-arm64/Meteoric.app
           test -f release-artifacts/meteoric-linux-x64/Meteoric-Linux-x64.tar.gz
-          test -f release-artifacts/meteoric-ios/Meteoric-iOS-unsigned.ipa
-          echo "七端产物齐全 ✓"
+          echo "六端产物齐全 ✓（iOS 已下线）"
 
       - name: 打包产物（zip/apk 单文件；自标识命名 <平台>-<版本>）
         run: |
@@ -127,7 +121,6 @@ jobs:
           (cd release-artifacts/meteoric-macos-x64 && zip -qry "../../dist/Meteoric-macOS-x86_64-$VERSION.zip" Meteoric.app)
           (cd release-artifacts/meteoric-macos-arm64 && zip -qry "../../dist/Meteoric-macOS-arm64-$VERSION.zip" Meteoric.app)
           cp release-artifacts/meteoric-linux-x64/Meteoric-Linux-x64.tar.gz "dist/Meteoric-Linux-x64-$VERSION.tar.gz"
-          cp release-artifacts/meteoric-ios/Meteoric-iOS-unsigned.ipa "dist/Meteoric-iOS-unsigned-$VERSION.ipa"
           # SHA256 校验和（Seiun 式自校验发布：用户下载后可核对完整性）
           (cd dist && sha256sum $(ls | grep -v '^SHA256SUMS\.txt$') > SHA256SUMS.txt)
           ls -la dist/
@@ -155,7 +148,6 @@ jobs:
               printf -- '- macOS x86_64 / macOS arm64（zip 内含 Meteoric.app）\n'
               printf -- '- Android arm64（APK）\n'
               printf -- '- Linux x86_64（tar.gz，解压后运行 bin/Meteoric；视频支持暂缺）\n'
-              printf -- '- iOS（未签名 IPA，AltStore/Sideloadly 侧载自动重签）\n'
               printf '\nSHA256 见 SHA256SUMS.txt\n\n构建信息：commit %s · run %s/%s\n' \
                 "${{ github.sha }}" "${{ github.run_id }}" "${{ github.run_attempt }}"
             } > "$NOTES"

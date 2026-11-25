@@ -27,6 +27,5 @@
 - macOS x86_64 / arm64（zip 内含 Meteoric.app）
 - Android arm64（APK）
 - Linux x86_64（tar.gz，解压后运行 bin/Meteoric；视频支持暂缺）
-- iOS（未签名 IPA，AltStore/Sideloadly 侧载自动重签）
 
 SHA256 见 SHA256SUMS.txt · 构建自 commit {SHA}
