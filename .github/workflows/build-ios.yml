@@ -100,6 +100,16 @@ jobs:
         run: bash ci/refresh-gitinfo.sh
 
       # -nosign → xcodebuild CODE_SIGNING_ALLOWED=NO（IOSHelper 内建支持）
+      # QjsNative.hx 里 `@:buildXml('<include name="../../../../third_party/quickjs/qjs.xml" />')`
+      # 是相对 hxcpp 构建目录的：iOS 的构建目录在 export/release/ios/build/Release-iphoneos-64，
+      # 往上 4 层落在 export/，于是找不到 third_party（其他平台 4 层刚好是仓库根）。
+      # 这里补一条 export/third_party 软链，避免为 iOS 单独改源码路径。
+      - name: 补齐 qjs.xml 的相对查找路径
+        run: |
+          mkdir -p export
+          ln -sfn ../third_party export/third_party
+          ls -l export/third_party/qjs.xml
+
       - name: 构建 iOS（未签名 device 构建）
         run: |
           export PATH="$HOME/haxe:$HOME/neko:$PATH"
